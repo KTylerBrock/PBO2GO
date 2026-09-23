@@ -139,7 +139,7 @@
       <button id="submit-order-btn" onclick="submitOrder()">Submit Order</button>
       <div id="cart-items"><div class="cart-empty">No items added yet.</div></div>
       <div class="cart-total-row"><span>Total items</span><span id="cart-count">0</span></div>
-      <div class="note">Order submission isn't wired up yet — this is a display-only test of the real catalog.</div>
+      <div class="note">Submitting creates a real order in the system.</div>
     </div>
   </div>
 </div>
@@ -154,6 +154,7 @@ let PRODUCTS = [];
 let cart = {};
 let activeCategory = "ALL";
 let searchTerm = "";
+let currentUserId = null;
 
 document.getElementById('login-form').addEventListener('submit', async function(e){
   e.preventDefault();
@@ -181,6 +182,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
     return;
   }
 
+  currentUserId = data.user.id;
   document.getElementById('user-name-label').textContent = profile.name;
   document.getElementById('user-role-badge').textContent = profile.role;
   document.querySelector('.view-login').style.display = 'none';
@@ -192,7 +194,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
 async function loadProducts(){
   const { data, error } = await supabaseClient
     .from('products')
-    .select('id, name, category, image_url, out_of_stock')
+    .select('id, name, category, image_url, out_of_stock, vin, routing_group')
     .order('name');
   if (error) {
     document.getElementById('product-grid').innerHTML = '<div style="color:#ff8080;">Could not load products: ' + error.message + '</div>';
@@ -262,6 +264,8 @@ function renderProductGrid(){
   }).join('');
 }
 
+let orderCart = {}; // productId -> quantity, for items actually added to the order
+
 function stepQty(id, delta){
   const cur = cart[id] || 1;
   const next = Math.max(1, cur + delta);
@@ -274,17 +278,95 @@ function setQty(id, val){
 function addToCart(id){
   const p = PRODUCTS.find(x => x.id === id);
   if (!p) return;
+  const qty = cart[id] || 1;
+  orderCart[id] = qty;
+  renderCart();
+}
+function removeFromCart(id){
+  delete orderCart[id];
   renderCart();
 }
 function renderCart(){
-  // Placeholder for the next build phase (real cart + order submission)
+  const ids = Object.keys(orderCart);
+  const cartItemsDiv = document.getElementById('cart-items');
+  const countSpan = document.getElementById('cart-count');
+
+  if (ids.length === 0) {
+    cartItemsDiv.innerHTML = '<div class="cart-empty">No items added yet.</div>';
+    countSpan.textContent = '0';
+    return;
+  }
+
+  let totalItems = 0;
+  cartItemsDiv.innerHTML = ids.map(id => {
+    const p = PRODUCTS.find(x => x.id === id);
+    if (!p) return '';
+    const qty = orderCart[id];
+    totalItems += qty;
+    return `<div class="cart-line">
+      <span>${escapeHtml(p.name)} &times; ${qty}</span>
+      <button class="remove" onclick="removeFromCart('${id}')">&times;</button>
+    </div>`;
+  }).join('');
+  countSpan.textContent = String(totalItems);
 }
-function submitOrder(){
-  alert('Order submission isn\'t wired up yet — coming in the next build step.');
+
+async function submitOrder(){
+  const ids = Object.keys(orderCart);
+  if (ids.length === 0) {
+    alert('Your order is empty — add some items first.');
+    return;
+  }
+
+  const btn = document.getElementById('submit-order-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+
+  const { data: order, error: orderError } = await supabaseClient
+    .from('orders')
+    .insert({ manager_id: currentUserId })
+    .select('id, order_number')
+    .single();
+
+  if (orderError) {
+    alert('Could not create order: ' + orderError.message);
+    btn.disabled = false;
+    btn.textContent = 'Submit Order';
+    return;
+  }
+
+  const items = ids.map(id => {
+    const p = PRODUCTS.find(x => x.id === id);
+    return {
+      order_id: order.id,
+      product_id: id,
+      product_name_snapshot: p.name,
+      vin_snapshot: p.vin,
+      routing_group_snapshot: p.routing_group,
+      quantity: orderCart[id]
+    };
+  });
+
+  const { error: itemsError } = await supabaseClient.from('order_items').insert(items);
+
+  btn.disabled = false;
+  btn.textContent = 'Submit Order';
+
+  if (itemsError) {
+    alert('Order was created but items failed to save: ' + itemsError.message);
+    return;
+  }
+
+  alert('Order #' + order.order_number + ' submitted successfully.');
+  orderCart = {};
+  renderCart();
 }
 
 function logout(){
   supabaseClient.auth.signOut();
+  currentUserId = null;
+  cart = {};
+  orderCart = {};
   document.getElementById('app-shell').style.display = 'none';
   document.querySelector('.view-login').style.display = 'block';
   document.getElementById('login-form').reset();
