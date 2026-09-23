@@ -1,24 +1,148 @@
 <!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>PBO2GO - Login Test</title>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gas n Go Order Portal</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-body { font-family: Arial, sans-serif; max-width: 400px; margin: 60px auto; padding: 0 20px; }
-input { width: 100%; padding: 8px; margin: 6px 0; box-sizing: border-box; }
-button { width: 100%; padding: 10px; background: #1b3a6b; color: #fff; border: none; cursor: pointer; margin-top: 8px; }
-#result { margin-top: 20px; padding: 12px; border-radius: 6px; }
-.success { background: #d4edda; color: #155724; }
-.error { background: #f8d7da; color: #721c24; }
+  :root{
+    --navy:#0f1419;
+    --navy-light:#1a2332;
+    --accent:#0099CC;
+    --accent-dark:#0077AA;
+    --accent-light:#00CCFF;
+    --secondary:#CCFF00;
+    --bg:#0a0d14;
+    --card:#ffffff;
+    --border:#e8eaed;
+    --text:#1a1f2e;
+    --text-light:#ffffff;
+    --muted:#6b7280;
+    --oos:#9ca3af;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0a0d14;color:var(--text-light);position:relative;}
+
+  .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .auth-card{background:#ffffff;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.3);padding:36px 34px;width:100%;max-width:380px;position:relative;z-index:1;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#333;}
+  .field input{width:100%;padding:10px 12px;border:1px solid #ccc;border-radius:6px;font-size:14px;}
+  .btn{display:inline-block;width:100%;padding:11px 14px;border-radius:6px;border:none;background:var(--navy);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;}
+  .btn:hover{background:var(--navy-light);}
+  .err{background:#fdeceb;color:#a02f2f;border:1px solid #f3c9c6;font-size:13px;padding:9px 11px;border-radius:6px;margin-bottom:14px;display:none;}
+
+  #wave-canvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+
+  #app-shell{display:none;position:relative;z-index:1;}
+  header.topbar{background:rgba(255,255,255,0.08);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border-bottom:1px solid rgba(255,255,255,0.15);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:56px;}
+  header.topbar nav button{background:transparent;border:none;color:#fff;padding:8px 14px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600;}
+  header.topbar nav button.active{background:rgba(0,153,204,0.28);}
+  header.topbar .userbox{display:flex;align-items:center;gap:12px;font-size:13.5px;}
+  header.topbar .userbox .role-badge{background:var(--accent);font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:.4px;}
+  header.topbar .userbox button{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;}
+  header.topbar .userbox button:hover{background:rgba(255,255,255,0.2);}
+
+  .order-layout{display:grid;grid-template-columns:200px 1fr 300px;gap:0;min-height:calc(100vh - 56px);}
+  .cat-sidebar{border-right:1px solid rgba(255,255,255,0.1);padding:16px 0;position:sticky;top:56px;align-self:start;max-height:calc(100vh - 56px);overflow-y:auto;}
+  .cat-sidebar button{display:block;width:100%;text-align:left;background:transparent;border:none;padding:10px 20px;font-size:14px;color:#fff;cursor:pointer;border-left:3px solid transparent;text-shadow:0 1px 3px rgba(0,0,0,0.8);font-weight:500;}
+  .cat-sidebar button:hover{background:rgba(255,255,255,0.1);}
+  .cat-sidebar button.active{border-left-color:var(--accent);background:rgba(255,255,255,0.16);font-weight:700;}
+  .cat-sidebar .count{color:#fff !important;font-size:12px;float:right;text-shadow:0 1px 3px rgba(0,0,0,0.8);}
+
+  .catalog-main{padding:20px 22px;overflow-y:auto;}
+  .catalog-main h2{margin:0 0 4px;font-size:20px;}
+  .catalog-main .subtext{color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;}
+  .search-row input{width:100%;max-width:340px;padding:9px 12px;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:14px;background:rgba(255,255,255,0.1);color:#fff;margin-bottom:16px;}
+  .search-row input::placeholder{color:rgba(255,255,255,0.65);}
+
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;}
+  .card{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;position:relative;padding:12px;backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);box-shadow:0 8px 32px rgba(0,0,0,0.3);transition:transform .35s;}
+  .card:hover:not(.oos){transform:translateY(-6px);}
+  .card.oos{opacity:.62;}
+  .card .imgwrap{aspect-ratio:1/1;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .card .imgwrap img{width:100%;height:100%;object-fit:contain;}
+  .card .noimg{color:var(--muted);font-size:11px;text-align:center;padding:10px;}
+  .card .body{padding:10px 12px 12px;flex:1;display:flex;flex-direction:column;}
+  .card .name{font-size:14.5px;font-weight:700;line-height:1.35;margin-bottom:8px;flex:1;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.8);}
+  .oos-badge{position:absolute;top:8px;left:8px;background:var(--oos);color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:10px;text-transform:uppercase;}
+  .qty-row{display:flex;align-items:center;justify-content:center;gap:6px;}
+  .qty-row button{width:26px;height:26px;border-radius:5px;border:1px solid var(--secondary);background:rgba(255,255,255,0.1);cursor:pointer;font-size:14px;color:var(--secondary);font-weight:700;}
+  .qty-row button:hover{background:var(--secondary);color:#000;}
+  .qty-row input{width:36px;text-align:center;border:1px solid var(--border);border-radius:5px;padding:4px 2px;font-size:13px;}
+  .add-btn{margin-top:8px;width:100%;padding:7px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;}
+  .add-btn:hover{background:var(--accent-dark);}
+  .add-btn:disabled{background:var(--oos);cursor:not-allowed;}
+
+  .order-sidebar{border-left:1px solid rgba(255,255,255,0.1);padding:18px;position:sticky;top:56px;align-self:start;max-height:calc(100vh - 56px);display:flex;flex-direction:column;}
+  .order-sidebar h3{margin:0 0 14px;font-size:15.5px;text-shadow:0 1px 3px rgba(0,0,0,0.8);}
+  #cart-items{flex:1;overflow-y:auto;margin-bottom:14px;}
+  .cart-empty{font-size:13px;text-align:center;padding:30px 0;}
+  .cart-line{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.1);font-size:13px;gap:8px;}
+  .cart-line .remove{color:#fff;cursor:pointer;font-size:14px;background:none;border:none;padding:0;margin-left:8px;}
+  .cart-total-row{display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;padding:10px 0;border-top:1px solid rgba(255,255,255,0.1);margin-bottom:10px;}
+  #submit-order-btn{width:100%;margin-bottom:16px;padding:11px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;}
+  .note{font-size:11.5px;color:rgba(255,255,255,0.6);margin-top:10px;}
 </style>
 </head>
 <body>
-<h2>PBO2GO Login Test</h2>
-<input type="email" id="email" placeholder="Email">
-<input type="password" id="password" placeholder="Password">
-<button onclick="tryLogin()">Log In</button>
-<div id="result"></div>
+
+<canvas id="wave-canvas"></canvas>
+
+<div class="view-login">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div style="display:flex;justify-content:center;gap:16px;align-items:center;margin-bottom:16px;">
+        <img src="images/perrybrothers-logo.png" alt="Perry Brothers" style="height:70px;width:auto;object-fit:contain;" onerror="this.style.display='none'">
+        <img src="images/gasngo-logo.png" alt="Gas n Go" style="height:70px;width:auto;object-fit:contain;" onerror="this.style.display='none'">
+      </div>
+      <div style="font-size:20px;font-weight:700;color:#333;text-align:center;margin-bottom:20px;">Manager Order Portal</div>
+      <div class="err" id="login-err"></div>
+      <form id="login-form">
+        <div class="field">
+          <label>Work Email</label>
+          <input type="email" id="login-email" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" required>
+        </div>
+        <button type="submit" class="btn">Log In</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="app-shell">
+  <header class="topbar">
+    <div style="font-size:16.5px;font-weight:800;">Gas n Go Order Portal</div>
+    <nav>
+      <button class="active">Place Order</button>
+    </nav>
+    <div class="userbox">
+      <span id="user-name-label"></span>
+      <span class="role-badge" id="user-role-badge"></span>
+      <button onclick="logout()">Log Out</button>
+    </div>
+  </header>
+
+  <div class="order-layout">
+    <div class="cat-sidebar" id="cat-sidebar"></div>
+    <div class="catalog-main">
+      <h2 id="catalog-title">All Items</h2>
+      <div class="subtext">Set quantities and add items to your order. Grayed-out items are marked out of stock.</div>
+      <div class="search-row"><input type="text" id="search-box" placeholder="Search items by name..."></div>
+      <div class="grid" id="product-grid"></div>
+    </div>
+    <div class="order-sidebar">
+      <h3>Your Order</h3>
+      <button id="submit-order-btn" onclick="submitOrder()">Submit Order</button>
+      <div id="cart-items"><div class="cart-empty">No items added yet.</div></div>
+      <div class="cart-total-row"><span>Total items</span><span id="cart-count">0</span></div>
+      <div class="note">Order submission isn't wired up yet — this is a display-only test of the real catalog.</div>
+    </div>
+  </div>
+</div>
 
 <script>
 const supabaseClient = supabase.createClient(
@@ -26,18 +150,22 @@ const supabaseClient = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcWJqa295eXlveXZ5dnRoZ2lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMTY5MzYsImV4cCI6MjEwNTU5MjkzNn0.GTOBtChXCWF3QOfJuEW7JevSbptScSi2TygL3BEBFbg"
 );
 
-async function tryLogin() {
-  const email = document.getElementById('email').value;
-  const password = document.getElementById('password').value;
-  const resultDiv = document.getElementById('result');
-  resultDiv.className = '';
-  resultDiv.textContent = 'Checking...';
+let PRODUCTS = [];
+let cart = {};
+let activeCategory = "ALL";
+let searchTerm = "";
+
+document.getElementById('login-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errBox = document.getElementById('login-err');
+  errBox.style.display = 'none';
 
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
   if (error) {
-    resultDiv.className = 'error';
-    resultDiv.textContent = 'Login failed: ' + error.message;
+    errBox.textContent = error.message;
+    errBox.style.display = 'block';
     return;
   }
 
@@ -48,14 +176,175 @@ async function tryLogin() {
     .single();
 
   if (profileError) {
-    resultDiv.className = 'error';
-    resultDiv.textContent = 'Logged in, but could not load profile: ' + profileError.message;
+    errBox.textContent = 'Logged in, but could not load profile: ' + profileError.message;
+    errBox.style.display = 'block';
     return;
   }
 
-  resultDiv.className = 'success';
-  resultDiv.textContent = 'Logged in as ' + profile.name + ' (' + profile.role + ', ' + profile.store + ')';
+  document.getElementById('user-name-label').textContent = profile.name;
+  document.getElementById('user-role-badge').textContent = profile.role;
+  document.querySelector('.view-login').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'block';
+
+  await loadProducts();
+});
+
+async function loadProducts(){
+  const { data, error } = await supabaseClient
+    .from('products')
+    .select('id, name, category, image_url, out_of_stock')
+    .order('name');
+  if (error) {
+    document.getElementById('product-grid').innerHTML = '<div style="color:#ff8080;">Could not load products: ' + error.message + '</div>';
+    return;
+  }
+  PRODUCTS = data;
+  renderCatSidebar();
+  renderProductGrid();
 }
+
+function categoryCounts(){
+  const counts = {};
+  PRODUCTS.forEach(p => { counts[p.category] = (counts[p.category] || 0) + 1; });
+  return counts;
+}
+
+function renderCatSidebar(){
+  const counts = categoryCounts();
+  const categories = Object.keys(counts).sort();
+  let html = `<button class="${activeCategory==='ALL'?'active':''}" onclick="setCategory('ALL')">All Items <span class="count">${PRODUCTS.length}</span></button>`;
+  categories.forEach(c => {
+    html += `<button class="${activeCategory===c?'active':''}" onclick="setCategory('${c.replace(/'/g,"\\'")}')">${c} <span class="count">${counts[c]}</span></button>`;
+  });
+  document.getElementById('cat-sidebar').innerHTML = html;
+}
+
+function setCategory(c){
+  activeCategory = c;
+  document.getElementById('catalog-title').textContent = c === 'ALL' ? 'All Items' : c;
+  renderCatSidebar();
+  renderProductGrid();
+}
+
+document.getElementById('search-box').addEventListener('input', function(e){
+  searchTerm = e.target.value.trim().toLowerCase();
+  renderProductGrid();
+});
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function renderProductGrid(){
+  let list = PRODUCTS;
+  if (activeCategory !== 'ALL') list = list.filter(p => p.category === activeCategory);
+  if (searchTerm) list = list.filter(p => p.name.toLowerCase().includes(searchTerm));
+
+  if (list.length === 0) {
+    document.getElementById('product-grid').innerHTML = '<div style="color:#00ccff;">No items match.</div>';
+    return;
+  }
+
+  document.getElementById('product-grid').innerHTML = list.map(p => {
+    const qty = cart[p.id] || 1;
+    const imgHtml = p.image_url ? `<img src="images/${encodeURIComponent(p.image_url)}" alt="">` : `<div class="noimg">No image on file</div>`;
+    return `<div class="card ${p.out_of_stock?'oos':''}">
+      ${p.out_of_stock ? '<div class="oos-badge">Out of Stock</div>' : ''}
+      <div class="imgwrap">${imgHtml}</div>
+      <div class="body">
+        <div class="name">${escapeHtml(p.name)}</div>
+        <div class="qty-row">
+          <button onclick="stepQty('${p.id}',-1)">&minus;</button>
+          <input type="number" min="1" value="${qty}" onchange="setQty('${p.id}', this.value)">
+          <button onclick="stepQty('${p.id}',1)">+</button>
+        </div>
+        <button class="add-btn" ${p.out_of_stock?'disabled':''} onclick="addToCart('${p.id}')">${p.out_of_stock?'Unavailable':'Add to Order'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function stepQty(id, delta){
+  const cur = cart[id] || 1;
+  const next = Math.max(1, cur + delta);
+  cart[id] = next;
+  renderProductGrid();
+}
+function setQty(id, val){
+  cart[id] = Math.max(1, parseInt(val, 10) || 1);
+}
+function addToCart(id){
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!p) return;
+  renderCart();
+}
+function renderCart(){
+  // Placeholder for the next build phase (real cart + order submission)
+}
+function submitOrder(){
+  alert('Order submission isn\'t wired up yet — coming in the next build step.');
+}
+
+function logout(){
+  supabaseClient.auth.signOut();
+  document.getElementById('app-shell').style.display = 'none';
+  document.querySelector('.view-login').style.display = 'block';
+  document.getElementById('login-form').reset();
+}
+
+/* ===== Animated background (same as the demo) ===== */
+const canvas = document.getElementById("wave-canvas");
+const ctx = canvas.getContext("2d");
+let time = 0;
+function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+const glows = [
+  {sx:0.15, sy:0.2, ex:0.7, ey:0.8, color:"#CCFF00", speed:0.002, sizeBase:150},
+  {sx:0.8, sy:0.15, ex:0.25, ey:0.7, color:"#0099CC", speed:0.0025, sizeBase:180},
+  {sx:0.1, sy:0.75, ex:0.85, ey:0.25, color:"#CCFF00", speed:0.0022, sizeBase:160},
+  {sx:0.85, sy:0.7, ex:0.1, ey:0.15, color:"#0099CC", speed:0.0023, sizeBase:170},
+  {sx:0.45, sy:0.35, ex:0.3, ey:0.8, color:"#CCFF00", speed:0.0024, sizeBase:200},
+  {sx:0.6, sy:0.65, ex:0.75, ey:0.2, color:"#0099CC", speed:0.0025, sizeBase:190},
+  {sx:0.25, sy:0.5, ex:0.65, ey:0.35, color:"#0099CC", speed:0.0021, sizeBase:140},
+  {sx:0.75, sy:0.45, ex:0.35, ey:0.6, color:"#CCFF00", speed:0.0026, sizeBase:160},
+  {sx:0.35, sy:0.1, ex:0.55, ey:0.85, color:"#0099CC", speed:0.0024, sizeBase:170},
+  {sx:0.7, sy:0.6, ex:0.2, ey:0.3, color:"#CCFF00", speed:0.0027, sizeBase:155},
+  {sx:0.05, sy:0.4, ex:0.9, ey:0.55, color:"#CCFF00", speed:0.0023, sizeBase:145},
+  {sx:0.9, sy:0.3, ex:0.05, ey:0.65, color:"#0099CC", speed:0.0025, sizeBase:175},
+  {sx:0.5, sy:0.8, ex:0.4, ey:0.1, color:"#0099CC", speed:0.0022, sizeBase:165},
+  {sx:0.2, sy:0.65, ex:0.8, ey:0.35, color:"#CCFF00", speed:0.0024, sizeBase:150},
+  {sx:0.65, sy:0.1, ex:0.15, ey:0.75, color:"#CCFF00", speed:0.0026, sizeBase:185},
+  {sx:0.3, sy:0.3, ex:0.7, ey:0.7, color:"#0099CC", speed:0.0023, sizeBase:160},
+];
+
+function drawGlows(){
+  time += 1;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  glows.forEach((glow, i) => {
+    const progress = (Math.sin(time * glow.speed) + 1) / 2;
+    const x = canvas.width * (glow.sx + (glow.ex - glow.sx) * progress);
+    const y = canvas.height * (glow.sy + (glow.ey - glow.sy) * progress);
+    const pulse = Math.sin(time * 0.005 + i) * 0.5 + 0.7;
+    const size = glow.sizeBase * pulse;
+    const opacity = 0.5 * pulse;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, size);
+    const r = parseInt(glow.color.slice(1,3),16);
+    const g = parseInt(glow.color.slice(3,5),16);
+    const b = parseInt(glow.color.slice(5,7),16);
+    grad.addColorStop(0, `rgba(${r},${g},${b},${opacity})`);
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},${opacity * 0.6})`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - size, y - size, size * 2, size * 2);
+    const coreGrad = ctx.createRadialGradient(x, y, 0, x, y, size * 0.4);
+    coreGrad.addColorStop(0, `rgba(${r},${g},${b},${opacity * 0.8})`);
+    coreGrad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = coreGrad;
+    ctx.fillRect(x - size * 0.4, y - size * 0.4, size * 0.8, size * 0.8);
+  });
+  requestAnimationFrame(drawGlows);
+}
+drawGlows();
 </script>
 </body>
 </html>
