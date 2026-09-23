@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PBO2GO - Login Test</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body { font-family: Arial, sans-serif; max-width: 400px; margin: 60px auto; padding: 0 20px; }
+input { width: 100%; padding: 8px; margin: 6px 0; box-sizing: border-box; }
+button { width: 100%; padding: 10px; background: #1b3a6b; color: #fff; border: none; cursor: pointer; margin-top: 8px; }
+#result { margin-top: 20px; padding: 12px; border-radius: 6px; }
+.success { background: #d4edda; color: #155724; }
+.error { background: #f8d7da; color: #721c24; }
+</style>
+</head>
+<body>
+<h2>PBO2GO Login Test</h2>
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="password" placeholder="Password">
+<button onclick="tryLogin()">Log In</button>
+<div id="result"></div>
+
+<script>
+const supabaseClient = supabase.createClient(
+  "https://lfqbjkoyyyoyvyvthgis.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcWJqa295eXlveXZ5dnRoZ2lzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMTY5MzYsImV4cCI6MjEwNTU5MjkzNn0.GTOBtChXCWF3QOfJuEW7JevSbptScSi2TygL3BEBFbg"
+);
+
+async function tryLogin() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const resultDiv = document.getElementById('result');
+  resultDiv.className = '';
+  resultDiv.textContent = 'Checking...';
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    resultDiv.className = 'error';
+    resultDiv.textContent = 'Login failed: ' + error.message;
+    return;
+  }
+
+  const { data: profile, error: profileError } = await supabaseClient
+    .from('managers')
+    .select('name, role, store')
+    .eq('id', data.user.id)
+    .single();
+
+  if (profileError) {
+    resultDiv.className = 'error';
+    resultDiv.textContent = 'Logged in, but could not load profile: ' + profileError.message;
+    return;
+  }
+
+  resultDiv.className = 'success';
+  resultDiv.textContent = 'Logged in as ' + profile.name + ' (' + profile.role + ', ' + profile.store + ')';
+}
+</script>
+</body>
+</html>
