@@ -123,6 +123,31 @@
   .success-icon{font-size:42px;text-align:center;margin-bottom:8px;}
   .modal-sub{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;margin-bottom:4px;}
 
+  .order-head .btn-preview{padding:5px 11px;border-radius:5px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.08);color:#fff;font-size:12px;font-weight:600;cursor:pointer;}
+  .order-head .btn-preview:hover{background:rgba(255,255,255,0.18);}
+  #email-preview-modal .modal-box{max-width:660px;color:#111;background:#fff;}
+  #email-preview-modal h3{color:#111;}
+  .preview-tabs{display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid #ddd;}
+  .preview-tabs button{padding:9px 14px;border:none;background:none;font-size:13px;font-weight:700;color:#777;cursor:pointer;border-bottom:3px solid transparent;}
+  .preview-tabs button.active{color:#111;border-bottom-color:var(--accent);}
+  .preview-tabs button:hover{color:#111;}
+  .ticket{border:1px solid #ccc;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;}
+  .ticket-head{padding:14px 18px;color:#fff;}
+  .ticket-head.pbo{background:#132a52;}
+  .ticket-head.gngfilter{background:#8c1c1c;}
+  .ticket-head.full{background:#1a1a1a;}
+  .ticket-head .ticket-brand{font-size:15px;font-weight:800;letter-spacing:0.5px;}
+  .ticket-head .ticket-sub{font-size:12px;opacity:0.85;margin-top:2px;}
+  .ticket-meta{padding:12px 18px;background:#f6f6f6;font-size:12.5px;color:#333;border-bottom:1px solid #ddd;}
+  .ticket-meta div{margin-bottom:3px;}
+  .ticket-meta b{color:#000;}
+  .ticket table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .ticket th{text-align:left;padding:7px 10px;background:#eee;color:#444;font-size:10.5px;text-transform:uppercase;border-bottom:1px solid #ccc;}
+  .ticket td{padding:8px 10px;border-bottom:1px solid #e5e5e5;color:#222;}
+  .ticket-sign{display:flex;gap:24px;padding:16px 18px;font-size:12px;color:#555;}
+  .ticket-sign .sign-line{flex:1;border-top:1px solid #999;padding-top:4px;}
+  .ticket-empty{padding:20px 18px;font-size:13px;color:#888;text-align:center;}
+
   .admin-view{padding:20px 22px;}
   .admin-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
   .admin-toolbar input{padding:9px 12px;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:14px;background:rgba(255,255,255,0.1);color:#fff;min-width:260px;}
@@ -434,6 +459,19 @@
     <h3>Order Submitted</h3>
     <p class="modal-sub" id="success-message"></p>
     <div class="modal-actions"><button class="btn-confirm" onclick="closeSuccessModal()">Done</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="email-preview-modal">
+  <div class="modal-box">
+    <h3>Email Preview <span style="font-weight:400;font-size:13px;color:#777;">&mdash; this is a preview only, nothing is actually sent</span></h3>
+    <div class="preview-tabs">
+      <button id="preview-tab-full" onclick="showPreviewTab('full')">Full Order</button>
+      <button id="preview-tab-gng" onclick="showPreviewTab('gng')">GNG + FILTER (Shana)</button>
+      <button id="preview-tab-pbo" onclick="showPreviewTab('pbo')">PBO (John)</button>
+    </div>
+    <div id="preview-tab-content"></div>
+    <div class="modal-actions"><button class="btn-cancel" onclick="closeEmailPreview()" style="flex:none;padding:10px 24px;">Close</button></div>
   </div>
 </div>
 
@@ -877,7 +915,7 @@ async function reloadHistoryForFilter(){
 async function fetchHistoryPage(){
   let query = supabaseClient
     .from('orders')
-    .select('id, order_number, created_at, managers!inner(name, store, site_number), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+    .select('id, order_number, created_at, managers!inner(name, store, site_number, dm_name, dm_email), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
     .order('created_at', { ascending: false })
     .range(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE - 1);
 
@@ -932,7 +970,7 @@ function renderHistoryList(){
     return `<div class="order-card">
       <div class="order-head">
         <span class="order-num">Order #${o.order_number}${storeLabel}</span>
-        <span class="order-meta">${when}</span>
+        <span class="order-meta">${when}${historyIsTop4 ? ` <button class="btn-preview" onclick="openEmailPreview('${o.id}')">Preview Emails</button>` : ''}</span>
       </div>
       <table>
         <tr><th>Item</th><th>VIN</th><th>Routing</th><th>Qty</th></tr>
@@ -940,6 +978,110 @@ function renderHistoryList(){
       </table>
     </div>`;
   }).join('');
+}
+
+let previewOrder = null;
+
+function openEmailPreview(orderId){
+  previewOrder = historyOrders.find(o => o.id === orderId);
+  if (!previewOrder) return;
+  document.getElementById('email-preview-modal').classList.add('active');
+  showPreviewTab('full');
+}
+
+function closeEmailPreview(){
+  document.getElementById('email-preview-modal').classList.remove('active');
+  previewOrder = null;
+}
+
+function showPreviewTab(tab){
+  document.getElementById('preview-tab-full').classList.toggle('active', tab === 'full');
+  document.getElementById('preview-tab-gng').classList.toggle('active', tab === 'gng');
+  document.getElementById('preview-tab-pbo').classList.toggle('active', tab === 'pbo');
+  renderPreviewTab(tab);
+}
+
+function ticketTable(items){
+  if (items.length === 0) return '<div class="ticket-empty">No items on this ticket for this order.</div>';
+  const rows = items.map(oi => `<tr>
+    <td>${escapeHtml(oi.product_name_snapshot)}</td>
+    <td>${escapeHtml(oi.vin_snapshot || '')}</td>
+    <td>${oi.quantity}</td>
+    <td></td>
+    <td></td>
+  </tr>`).join('');
+  return `<table>
+    <tr><th>Item</th><th>VIN</th><th>Qty Ordered</th><th>Qty Picked</th><th>Notes</th></tr>
+    ${rows}
+  </table>
+  <div class="ticket-sign">
+    <div class="sign-line">Signature</div>
+    <div class="sign-line">Date</div>
+  </div>`;
+}
+
+function renderPreviewTab(tab){
+  const o = previewOrder;
+  if (!o) return;
+  const when = new Date(o.created_at).toLocaleString();
+  const m = o.managers || {};
+  const storeName = m.site_number ? siteLabel(m) : (m.store || '');
+  const container = document.getElementById('preview-tab-content');
+
+  if (tab === 'full') {
+    const isCorporate = m.store === 'Corporate';
+    const dmLine = isCorporate
+      ? 'No District Manager &mdash; Corporate account order.'
+      : (m.dm_name ? `${escapeHtml(m.dm_name)} (${escapeHtml(m.dm_email)})` : 'No DM on file for this store.');
+    const rows = o.order_items.map(oi => `<tr>
+      <td>${escapeHtml(oi.product_name_snapshot)}</td>
+      <td>${escapeHtml(oi.vin_snapshot || '')}</td>
+      <td>${escapeHtml(oi.routing_group_snapshot || '')}</td>
+      <td>${oi.quantity}</td>
+    </tr>`).join('');
+    container.innerHTML = `<div class="ticket">
+      <div class="ticket-head full">
+        <div class="ticket-brand">PBO2GO &mdash; Full Order Copy</div>
+        <div class="ticket-sub">Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
+      </div>
+      <div class="ticket-meta">
+        <div><b>To:</b> AbbyButler@perrybrothersoil.com${!isCorporate && m.dm_email ? ', ' + escapeHtml(m.dm_email) : ''}</div>
+        <div><b>District Manager:</b> ${dmLine}</div>
+        <div><b>Placed by:</b> ${escapeHtml(m.name || '')}</div>
+        <div><b>Placed:</b> ${when}</div>
+      </div>
+      <table>
+        <tr><th>Item</th><th>VIN</th><th>Routing</th><th>Qty</th></tr>
+        ${rows}
+      </table>
+    </div>`;
+  } else if (tab === 'gng') {
+    const items = o.order_items.filter(oi => oi.routing_group_snapshot === 'GNG' || oi.routing_group_snapshot === 'FILTER');
+    container.innerHTML = `<div class="ticket">
+      <div class="ticket-head gngfilter">
+        <div class="ticket-brand">GNG + FILTER Pick Ticket</div>
+        <div class="ticket-sub">Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
+      </div>
+      <div class="ticket-meta">
+        <div><b>To:</b> ShanaLynn@perrybrothersoil.com</div>
+        <div><b>Placed:</b> ${when}</div>
+      </div>
+      ${ticketTable(items)}
+    </div>`;
+  } else {
+    const items = o.order_items.filter(oi => oi.routing_group_snapshot === 'PBO');
+    container.innerHTML = `<div class="ticket">
+      <div class="ticket-head pbo">
+        <div class="ticket-brand">PBO Pick Ticket</div>
+        <div class="ticket-sub">Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
+      </div>
+      <div class="ticket-meta">
+        <div><b>To:</b> johncook@perrybrothersoil.com</div>
+        <div><b>Placed:</b> ${when}</div>
+      </div>
+      ${ticketTable(items)}
+    </div>`;
+  }
 }
 
 let adminSearchTerm = '';
@@ -1501,6 +1643,7 @@ function logout(){
   closeProductModal();
   closeAccountModal();
   closePasswordModal();
+  closeEmailPreview();
   document.getElementById('app-shell').style.display = 'none';
   document.querySelector('.view-login').style.display = 'block';
   document.getElementById('login-form').reset();
