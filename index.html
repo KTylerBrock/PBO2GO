@@ -188,11 +188,12 @@
   #request-view .field input{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
   #request-view .field input::placeholder{color:rgba(255,255,255,0.45);}
 
-  #account-modal .field{margin-bottom:14px;text-align:left;}
-  #account-modal .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
-  #account-modal .field input, #account-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #account-modal .field, #new-account-modal .field{margin-bottom:14px;text-align:left;}
+  #account-modal .field label, #new-account-modal .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
+  #account-modal .field input, #account-modal .field select, #new-account-modal .field input, #new-account-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
   #account-modal .field input:disabled{opacity:0.6;}
-  #account-modal .field select option{background:#151b26;color:#fff;}
+  #account-modal .field select option, #new-account-modal .field select option{background:#151b26;color:#fff;}
+  .accounts-toolbar-row{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;}
 
   #profile-view .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
   #profile-view .field input{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
@@ -325,6 +326,7 @@
     <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Manage everyone's login info. Password resets generate a new one-time password to hand off directly.</div>
     <div class="admin-toolbar">
       <input type="text" id="accounts-search-box" placeholder="Search accounts...">
+      <button class="btn-add" id="new-account-btn" style="display:none;" onclick="openNewAccountModal()">+ New Account</button>
     </div>
     <div id="accounts-rows"></div>
   </div>
@@ -431,11 +433,51 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="new-account-modal">
+  <div class="modal-box">
+    <h3>New Account</h3>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="new-account-name">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="new-account-email" placeholder="name@perrybrothersoil.com">
+    </div>
+    <div class="field">
+      <label>Phone</label>
+      <input type="text" id="new-account-phone">
+    </div>
+    <div class="field">
+      <label>Role</label>
+      <select id="new-account-role" onchange="toggleNewAccountStoreFields()">
+        <option value="manager" selected>Manager (store account)</option>
+        <option value="staff">Staff</option>
+        <option value="admin">Admin</option>
+        <option value="owner">Owner</option>
+      </select>
+    </div>
+    <div class="field" id="new-account-store-field">
+      <label>Store</label>
+      <input type="text" id="new-account-store" placeholder="e.g. Byron Gas N Go">
+    </div>
+    <div class="field" id="new-account-site-field">
+      <label>Site Number</label>
+      <input type="number" id="new-account-site-number" placeholder="e.g. 81">
+    </div>
+    <div class="err" id="new-account-modal-err"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeNewAccountModal()">Cancel</button>
+      <button class="btn-confirm" id="save-new-account-btn" onclick="saveNewAccount()">Create Account</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="password-modal">
   <div class="modal-box success-box">
     <div class="success-icon">&#128273;</div>
-    <h3>New Password</h3>
-    <p class="modal-sub">For <strong id="password-modal-name"></strong>:</p>
+    <h3 id="password-modal-title">New Password</h3>
+    <p class="modal-sub" id="password-modal-lead">For <strong id="password-modal-name"></strong>:</p>
     <div id="password-modal-value" style="background:rgba(255,255,255,0.1);border-radius:6px;padding:12px;font-family:monospace;font-size:16px;text-align:center;margin:12px 0;user-select:all;"></div>
     <p class="modal-sub" style="font-size:12px;">Copy this and share it with them directly &mdash; it won't be shown again.</p>
     <div class="modal-actions"><button class="btn-confirm" onclick="closePasswordModal()">Done</button></div>
@@ -1251,6 +1293,8 @@ document.getElementById('accounts-search-box').addEventListener('input', functio
 });
 
 async function loadAccounts(){
+  document.getElementById('new-account-btn').style.display = currentRole === 'owner' ? 'inline-block' : 'none';
+
   const { data, error } = await supabaseClient
     .from('managers')
     .select('id, name, email, phone, store, role, site_number, is_protected')
@@ -1382,6 +1426,8 @@ async function resetPassword(id, name){
     return;
   }
 
+  document.getElementById('password-modal-title').textContent = 'New Password';
+  document.getElementById('password-modal-lead').innerHTML = 'For <strong id="password-modal-name"></strong>:';
   document.getElementById('password-modal-name').textContent = name;
   document.getElementById('password-modal-value').textContent = data.password;
   document.getElementById('password-modal').classList.add('active');
@@ -1389,6 +1435,85 @@ async function resetPassword(id, name){
 
 function closePasswordModal(){
   document.getElementById('password-modal').classList.remove('active');
+}
+
+function toggleNewAccountStoreFields(){
+  const isManager = document.getElementById('new-account-role').value === 'manager';
+  document.getElementById('new-account-store-field').style.display = isManager ? 'block' : 'none';
+  document.getElementById('new-account-site-field').style.display = isManager ? 'block' : 'none';
+}
+
+function openNewAccountModal(){
+  document.getElementById('new-account-name').value = '';
+  document.getElementById('new-account-email').value = '';
+  document.getElementById('new-account-phone').value = '';
+  document.getElementById('new-account-role').value = 'manager';
+  document.getElementById('new-account-store').value = '';
+  document.getElementById('new-account-site-number').value = '';
+  document.getElementById('new-account-modal-err').style.display = 'none';
+  toggleNewAccountStoreFields();
+  document.getElementById('new-account-modal').classList.add('active');
+}
+
+function closeNewAccountModal(){
+  document.getElementById('new-account-modal').classList.remove('active');
+}
+
+async function saveNewAccount(){
+  const name = document.getElementById('new-account-name').value.trim();
+  const email = document.getElementById('new-account-email').value.trim();
+  const phone = document.getElementById('new-account-phone').value.trim() || null;
+  const role = document.getElementById('new-account-role').value;
+  const isManager = role === 'manager';
+  const store = isManager ? document.getElementById('new-account-store').value.trim() : 'Corporate';
+  const siteNumberRaw = document.getElementById('new-account-site-number').value.trim();
+  const siteNumber = isManager && siteNumberRaw ? parseInt(siteNumberRaw, 10) : null;
+
+  const errBox = document.getElementById('new-account-modal-err');
+  errBox.style.display = 'none';
+
+  if (!name || !email || (isManager && !store)) {
+    errBox.textContent = isManager ? 'Name, email, and store are required.' : 'Name and email are required.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('save-new-account-btn');
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+
+  const { data, error } = await supabaseClient.functions.invoke('create-account', {
+    body: { name, email, phone, role, store, site_number: siteNumber }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Create Account';
+
+  if (error) {
+    let msg = error.message;
+    try {
+      const body = await error.context.json();
+      if (body && body.error) msg = body.error;
+    } catch (e) {}
+    errBox.textContent = 'Could not create account: ' + msg;
+    errBox.style.display = 'block';
+    return;
+  }
+
+  if (!data || !data.password) {
+    errBox.textContent = 'Could not create account: unexpected response from server.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  closeNewAccountModal();
+  await loadAccounts();
+
+  document.getElementById('password-modal-title').textContent = 'Account Created';
+  document.getElementById('password-modal-lead').innerHTML = 'Temp password for <strong id="password-modal-name"></strong>:';
+  document.getElementById('password-modal-name').textContent = name + ' (' + email + ')';
+  document.getElementById('password-modal-value').textContent = data.password;
+  document.getElementById('password-modal').classList.add('active');
 }
 
 async function loadProfileView(){
@@ -1642,8 +1767,10 @@ function logout(){
   closeSuccessModal();
   closeProductModal();
   closeAccountModal();
+  closeNewAccountModal();
   closePasswordModal();
   closeEmailPreview();
+  document.getElementById('new-account-btn').style.display = 'none';
   document.getElementById('app-shell').style.display = 'none';
   document.querySelector('.view-login').style.display = 'block';
   document.getElementById('login-form').reset();
