@@ -162,6 +162,12 @@
   #request-view .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
   #request-view .field input{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
   #request-view .field input::placeholder{color:rgba(255,255,255,0.45);}
+
+  #account-modal .field{margin-bottom:14px;text-align:left;}
+  #account-modal .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
+  #account-modal .field input, #account-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #account-modal .field input:disabled{opacity:0.6;}
+  #account-modal .field select option{background:#151b26;color:#fff;}
 </style>
 </head>
 <body>
@@ -201,6 +207,7 @@
       <button id="nav-request" onclick="switchView('request')" style="display:none;">Request Product</button>
       <button id="nav-requests" onclick="switchView('requests')" style="display:none;">Product Requests</button>
       <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
+      <button id="nav-accounts" onclick="switchView('accounts')" style="display:none;">Accounts</button>
     </nav>
     <div class="userbox">
       <span id="user-name-label"></span>
@@ -282,6 +289,15 @@
     <h3 style="margin:28px 0 10px;font-size:16px;">Reviewed</h3>
     <div id="reviewed-requests-list"></div>
   </div>
+
+  <div class="admin-view" id="accounts-view" style="display:none;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Accounts</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Manage everyone's login info. Password resets generate a new one-time password to hand off directly.</div>
+    <div class="admin-toolbar">
+      <input type="text" id="accounts-search-box" placeholder="Search accounts...">
+    </div>
+    <div id="accounts-rows"></div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="product-modal">
@@ -324,6 +340,53 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="account-modal">
+  <div class="modal-box">
+    <h3 id="account-modal-title">Edit Account</h3>
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="account-name">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="text" id="account-email" disabled>
+    </div>
+    <div class="field">
+      <label>Phone</label>
+      <input type="text" id="account-phone">
+    </div>
+    <div class="field" id="account-store-field">
+      <label>Store</label>
+      <input type="text" id="account-store">
+    </div>
+    <div class="field" id="account-role-field">
+      <label>Role</label>
+      <select id="account-role">
+        <option value="owner">Owner</option>
+        <option value="admin">Admin</option>
+        <option value="staff">Staff</option>
+        <option value="manager">Manager</option>
+      </select>
+    </div>
+    <div class="err" id="account-modal-err"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeAccountModal()">Cancel</button>
+      <button class="btn-confirm" id="save-account-btn" onclick="saveAccount()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="password-modal">
+  <div class="modal-box success-box">
+    <div class="success-icon">&#128273;</div>
+    <h3>New Password</h3>
+    <p class="modal-sub">For <strong id="password-modal-name"></strong>:</p>
+    <div id="password-modal-value" style="background:rgba(255,255,255,0.1);border-radius:6px;padding:12px;font-family:monospace;font-size:16px;text-align:center;margin:12px 0;user-select:all;"></div>
+    <p class="modal-sub" style="font-size:12px;">Copy this and share it with them directly &mdash; it won't be shown again.</p>
+    <div class="modal-actions"><button class="btn-confirm" onclick="closePasswordModal()">Done</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="review-modal">
   <div class="modal-box">
     <h3>Review Your Order</h3>
@@ -361,7 +424,7 @@ let historyStoreFilterValue = 'ALL';
 let myFilters = [];
 let filtersInCart = false;
 const ADMIN_ROLES = ['owner', 'admin'];
-const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment' };
+const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager' };
 function roleLabel(role){
   return ROLE_LABELS[role] || role;
 }
@@ -402,6 +465,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
   document.getElementById('nav-admin').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-request').style.display = profile.role === 'staff' ? 'inline-block' : 'none';
   document.getElementById('nav-requests').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
+  document.getElementById('nav-accounts').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.querySelector('.view-login').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
   switchView('order');
@@ -714,15 +778,18 @@ function switchView(view){
   document.getElementById('nav-request').classList.toggle('active', view === 'request');
   document.getElementById('nav-requests').classList.toggle('active', view === 'requests');
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
+  document.getElementById('nav-accounts').classList.toggle('active', view === 'accounts');
   document.querySelector('.order-layout').style.display = view === 'order' ? 'grid' : 'none';
   document.getElementById('history-view').style.display = view === 'history' ? 'block' : 'none';
   document.getElementById('request-view').style.display = view === 'request' ? 'block' : 'none';
   document.getElementById('requests-view').style.display = view === 'requests' ? 'block' : 'none';
   document.getElementById('admin-view').style.display = view === 'admin' ? 'block' : 'none';
+  document.getElementById('accounts-view').style.display = view === 'accounts' ? 'block' : 'none';
   if (view === 'history') loadHistory();
   if (view === 'admin') renderAdminProducts();
   if (view === 'request') loadRequestView();
   if (view === 'requests') loadRequestsQueue();
+  if (view === 'accounts') loadAccounts();
 }
 
 const TOP4_ROLES = ['owner', 'admin', 'staff'];
@@ -999,6 +1066,156 @@ async function deleteProduct(id){
   renderAdminProducts();
 }
 
+let ACCOUNTS = [];
+let accountsSearchTerm = '';
+let editingAccountId = null;
+
+document.getElementById('accounts-search-box').addEventListener('input', function(e){
+  accountsSearchTerm = e.target.value.trim().toLowerCase();
+  renderAccounts();
+});
+
+async function loadAccounts(){
+  const { data, error } = await supabaseClient
+    .from('managers')
+    .select('id, name, email, phone, store, role, site_number, is_protected')
+    .order('role')
+    .order('name');
+
+  if (error) {
+    document.getElementById('accounts-rows').innerHTML = '<div style="color:#ff8080;">Could not load accounts: ' + error.message + '</div>';
+    return;
+  }
+  ACCOUNTS = data;
+  renderAccounts();
+}
+
+function renderAccounts(){
+  let list = ACCOUNTS;
+  if (accountsSearchTerm) {
+    list = list.filter(m => m.name.toLowerCase().includes(accountsSearchTerm) || m.email.toLowerCase().includes(accountsSearchTerm));
+  }
+
+  document.getElementById('accounts-rows').innerHTML = `<table class="admin-table">
+    <tr><th>Name</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th></th></tr>` + list.map(m => {
+    const canEdit = currentRole === 'owner' || m.id === currentUserId;
+    const canDelete = currentRole === 'owner' && !m.is_protected && m.id !== currentUserId;
+    return `<tr>
+      <td>${escapeHtml(m.name)}</td>
+      <td>${escapeHtml(m.email)}</td>
+      <td>${escapeHtml(roleLabel(m.role))}</td>
+      <td>${escapeHtml(m.store || '')}</td>
+      <td>${escapeHtml(m.phone || '')}</td>
+      <td>
+        ${canEdit ? `<button onclick="openAccountModal('${m.id}')">Edit</button>` : ''}
+        <button onclick="resetPassword('${m.id}', '${escapeHtml(m.name).replace(/'/g,"\\'")}')">Reset Password</button>
+        ${canDelete ? `<button class="danger" onclick="deleteAccount('${m.id}')">Delete</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('') + `</table>`;
+}
+
+function openAccountModal(id){
+  editingAccountId = id;
+  const m = ACCOUNTS.find(x => x.id === id);
+  document.getElementById('account-modal-err').style.display = 'none';
+  document.getElementById('account-name').value = m.name;
+  document.getElementById('account-email').value = m.email;
+  document.getElementById('account-phone').value = m.phone || '';
+  document.getElementById('account-store').value = m.store || '';
+  document.getElementById('account-role').value = m.role;
+
+  const isOwner = currentRole === 'owner';
+  document.getElementById('account-store-field').style.display = isOwner ? 'block' : 'none';
+  document.getElementById('account-role-field').style.display = isOwner ? 'block' : 'none';
+
+  document.getElementById('account-modal').classList.add('active');
+}
+
+function closeAccountModal(){
+  document.getElementById('account-modal').classList.remove('active');
+}
+
+async function saveAccount(){
+  const name = document.getElementById('account-name').value.trim();
+  const phone = document.getElementById('account-phone').value.trim() || null;
+  const errBox = document.getElementById('account-modal-err');
+  errBox.style.display = 'none';
+
+  if (!name) {
+    errBox.textContent = 'Name is required.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const record = { name, phone };
+  if (currentRole === 'owner') {
+    record.store = document.getElementById('account-store').value.trim();
+    record.role = document.getElementById('account-role').value;
+  }
+
+  const btn = document.getElementById('save-account-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const { error } = await supabaseClient.from('managers').update(record).eq('id', editingAccountId);
+
+  btn.disabled = false;
+  btn.textContent = 'Save';
+
+  if (error) {
+    errBox.textContent = 'Could not save: ' + error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+
+  closeAccountModal();
+  await loadAccounts();
+}
+
+async function deleteAccount(id){
+  const m = ACCOUNTS.find(x => x.id === id);
+  if (!confirm('Delete "' + m.name + '"\'s account entirely? This cannot be undone.')) return;
+
+  const { error } = await supabaseClient.from('managers').delete().eq('id', id);
+  if (error) {
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  await loadAccounts();
+}
+
+async function resetPassword(id, name){
+  if (!confirm('Generate a new password for ' + name + '?')) return;
+
+  const { data, error } = await supabaseClient.functions.invoke('reset-password', {
+    body: { target_user_id: id }
+  });
+
+  if (error) {
+    let msg = error.message;
+    try {
+      const body = await error.context.json();
+      if (body && body.error) msg = body.error;
+    } catch (e) {}
+    alert('Could not reset password: ' + msg);
+    return;
+  }
+
+  if (!data || !data.password) {
+    alert('Could not reset password: unexpected response from server.');
+    return;
+  }
+
+  document.getElementById('password-modal-name').textContent = name;
+  document.getElementById('password-modal-value').textContent = data.password;
+  document.getElementById('password-modal').classList.add('active');
+}
+
+function closePasswordModal(){
+  document.getElementById('password-modal').classList.remove('active');
+}
+
 function loadRequestView(){
   populateCategoryOptions();
   loadMyRequests();
@@ -1173,6 +1390,7 @@ function logout(){
   document.getElementById('nav-admin').style.display = 'none';
   document.getElementById('nav-request').style.display = 'none';
   document.getElementById('nav-requests').style.display = 'none';
+  document.getElementById('nav-accounts').style.display = 'none';
   document.getElementById('admin-product-rows').innerHTML = '';
   document.getElementById('admin-search-box').value = '';
   document.getElementById('my-requests-list').innerHTML = '';
@@ -1182,12 +1400,19 @@ function logout(){
   document.getElementById('request-category').value = '';
   document.getElementById('request-image-url').value = '';
   document.getElementById('request-notes').value = '';
+  document.getElementById('accounts-rows').innerHTML = '';
+  document.getElementById('accounts-search-box').value = '';
   adminSearchTerm = '';
+  accountsSearchTerm = '';
   editingProductId = null;
   productImageFile = null;
+  editingAccountId = null;
+  ACCOUNTS = [];
   closeReviewModal();
   closeSuccessModal();
   closeProductModal();
+  closeAccountModal();
+  closePasswordModal();
   document.getElementById('app-shell').style.display = 'none';
   document.querySelector('.view-login').style.display = 'block';
   document.getElementById('login-form').reset();
