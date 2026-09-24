@@ -809,7 +809,11 @@ function renderHistoryList(){
 
   document.getElementById('history-list').innerHTML = historyOrders.map(o => {
     const when = new Date(o.created_at).toLocaleString();
-    const storeLabel = historyIsTop4 && o.managers ? ' &mdash; ' + escapeHtml(o.managers.store) : '';
+    let storeLabel = '';
+    if (historyIsTop4 && o.managers) {
+      storeLabel = ' &mdash; ' + escapeHtml(o.managers.name);
+      if (o.managers.name !== o.managers.store) storeLabel += ' (' + escapeHtml(o.managers.store) + ')';
+    }
     const rows = o.order_items.map(oi => `<tr>
       <td>${escapeHtml(oi.product_name_snapshot)}</td>
       <td>${escapeHtml(oi.vin_snapshot || '')}</td>
