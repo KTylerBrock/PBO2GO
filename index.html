@@ -111,6 +111,9 @@
   .modal-actions .btn-confirm:disabled{background:var(--oos);cursor:not-allowed;}
   .modal-actions .btn-cancel{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.25);}
   .modal-actions .btn-cancel:hover{background:rgba(255,255,255,0.18);}
+  #filter-section{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;}
+  #filter-section label{display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:600;}
+  #filter-section .filter-list{margin:6px 0 0 24px;color:rgba(255,255,255,0.7);font-weight:400;}
   .success-box{text-align:center;}
   .success-icon{font-size:42px;text-align:center;margin-bottom:8px;}
   .modal-sub{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;margin-bottom:4px;}
@@ -168,6 +171,7 @@
     </div>
     <div class="order-sidebar">
       <h3>Your Order</h3>
+      <div id="filter-section" style="display:none;"></div>
       <button id="submit-order-btn" onclick="openReviewModal()">Submit Order</button>
       <div id="cart-items"><div class="cart-empty">No items added yet.</div></div>
       <div class="cart-total-row"><span>Total items</span><span id="cart-count">0</span></div>
@@ -217,6 +221,8 @@ let currentUserId = null;
 let currentRole = null;
 let currentStore = null;
 let historyStoreFilterValue = 'ALL';
+let myFilters = [];
+let filtersInCart = false;
 
 document.getElementById('login-form').addEventListener('submit', async function(e){
   e.preventDefault();
@@ -254,7 +260,36 @@ document.getElementById('login-form').addEventListener('submit', async function(
   switchView('order');
 
   await loadProducts();
+  await loadMyFilters();
 });
+
+async function loadMyFilters(){
+  const { data, error } = await supabaseClient
+    .from('store_filters')
+    .select('size, monthly_quantity')
+    .eq('manager_id', currentUserId)
+    .order('size');
+
+  const section = document.getElementById('filter-section');
+  if (error || !data || data.length === 0) {
+    myFilters = [];
+    section.style.display = 'none';
+    return;
+  }
+
+  myFilters = data;
+  section.style.display = 'block';
+  section.innerHTML = `<label>
+      <input type="checkbox" id="filter-checkbox" onchange="toggleFilters(this.checked)">
+      Add my monthly filters
+    </label>
+    <div class="filter-list">${myFilters.map(f => `${escapeHtml(f.size)} &times; ${f.monthly_quantity}`).join('<br>')}</div>`;
+}
+
+function toggleFilters(checked){
+  filtersInCart = checked;
+  renderCart();
+}
 
 async function loadProducts(){
   const { data, error } = await supabaseClient
@@ -351,19 +386,23 @@ function removeFromCart(id){
   delete orderCart[id];
   renderCart();
 }
+function filterLines(){
+  return myFilters.map(f => `${escapeHtml(f.size)} &times; ${f.monthly_quantity}`).join(', ');
+}
+
 function renderCart(){
   const ids = Object.keys(orderCart);
   const cartItemsDiv = document.getElementById('cart-items');
   const countSpan = document.getElementById('cart-count');
 
-  if (ids.length === 0) {
+  if (ids.length === 0 && !filtersInCart) {
     cartItemsDiv.innerHTML = '<div class="cart-empty">No items added yet.</div>';
     countSpan.textContent = '0';
     return;
   }
 
   let totalItems = 0;
-  cartItemsDiv.innerHTML = ids.map(id => {
+  let html = ids.map(id => {
     const p = PRODUCTS.find(x => x.id === id);
     if (!p) return '';
     const qty = orderCart[id];
@@ -373,11 +412,28 @@ function renderCart(){
       <button class="remove" onclick="removeFromCart('${id}')">&times;</button>
     </div>`;
   }).join('');
+
+  if (filtersInCart) {
+    totalItems += myFilters.reduce((sum, f) => sum + f.monthly_quantity, 0);
+    html += `<div class="cart-line">
+      <span>Monthly Filters: ${filterLines()}</span>
+      <button class="remove" onclick="removeFiltersFromCart()">&times;</button>
+    </div>`;
+  }
+
+  cartItemsDiv.innerHTML = html;
   countSpan.textContent = String(totalItems);
 }
 
+function removeFiltersFromCart(){
+  filtersInCart = false;
+  const checkbox = document.getElementById('filter-checkbox');
+  if (checkbox) checkbox.checked = false;
+  renderCart();
+}
+
 function openReviewModal(){
-  if (Object.keys(orderCart).length === 0) {
+  if (Object.keys(orderCart).length === 0 && !filtersInCart) {
     alert('Your order is empty — add some items first.');
     return;
   }
@@ -393,17 +449,23 @@ function removeFromReview(id){
   delete orderCart[id];
   renderCart();
   renderReviewItems();
-  if (Object.keys(orderCart).length === 0) closeReviewModal();
+  if (Object.keys(orderCart).length === 0 && !filtersInCart) closeReviewModal();
+}
+
+function removeFiltersFromReview(){
+  removeFiltersFromCart();
+  renderReviewItems();
+  if (Object.keys(orderCart).length === 0 && !filtersInCart) closeReviewModal();
 }
 
 function renderReviewItems(){
   const ids = Object.keys(orderCart);
   const container = document.getElementById('review-items');
-  if (ids.length === 0) {
+  if (ids.length === 0 && !filtersInCart) {
     container.innerHTML = '<div class="modal-empty">No items added yet.</div>';
     return;
   }
-  container.innerHTML = ids.map(id => {
+  let html = ids.map(id => {
     const p = PRODUCTS.find(x => x.id === id);
     if (!p) return '';
     return `<div class="modal-line">
@@ -411,11 +473,20 @@ function renderReviewItems(){
       <button class="remove" onclick="removeFromReview('${id}')">&times;</button>
     </div>`;
   }).join('');
+
+  if (filtersInCart) {
+    html += `<div class="modal-line">
+      <span>Monthly Filters: ${filterLines()}</span>
+      <button class="remove" onclick="removeFiltersFromReview()">&times;</button>
+    </div>`;
+  }
+
+  container.innerHTML = html;
 }
 
 async function confirmSubmitOrder(){
   const ids = Object.keys(orderCart);
-  if (ids.length === 0) {
+  if (ids.length === 0 && !filtersInCart) {
     closeReviewModal();
     return;
   }
@@ -449,6 +520,19 @@ async function confirmSubmitOrder(){
     };
   });
 
+  if (filtersInCart) {
+    myFilters.forEach(f => {
+      items.push({
+        order_id: order.id,
+        product_id: null,
+        product_name_snapshot: 'FILTER ' + f.size,
+        vin_snapshot: null,
+        routing_group_snapshot: 'FILTER',
+        quantity: f.monthly_quantity
+      });
+    });
+  }
+
   const { error: itemsError } = await supabaseClient.from('order_items').insert(items);
 
   btn.disabled = false;
@@ -460,7 +544,7 @@ async function confirmSubmitOrder(){
   }
 
   orderCart = {};
-  renderCart();
+  removeFiltersFromCart();
   closeReviewModal();
   document.getElementById('success-message').textContent = 'Order #' + order.order_number + ' has been submitted.';
   document.getElementById('success-modal').classList.add('active');
@@ -557,9 +641,13 @@ function logout(){
   historyStoreFilterValue = 'ALL';
   cart = {};
   orderCart = {};
+  myFilters = [];
+  filtersInCart = false;
   document.getElementById('history-list').innerHTML = '';
   document.getElementById('history-subtext').textContent = '';
   document.getElementById('history-store-filter').innerHTML = '';
+  document.getElementById('filter-section').innerHTML = '';
+  document.getElementById('filter-section').style.display = 'none';
   closeReviewModal();
   closeSuccessModal();
   document.getElementById('app-shell').style.display = 'none';
