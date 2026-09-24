@@ -115,9 +115,10 @@
   .modal-actions .btn-confirm:disabled{background:var(--oos);cursor:not-allowed;}
   .modal-actions .btn-cancel{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.25);}
   .modal-actions .btn-cancel:hover{background:rgba(255,255,255,0.18);}
-  #filter-section{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;}
-  #filter-section label{display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:600;}
-  #filter-section .filter-list{margin:6px 0 0 24px;color:rgba(255,255,255,0.7);font-weight:400;}
+  #filter-section{background:rgba(0,153,204,0.14);border:1px solid var(--accent);border-radius:8px;padding:16px 20px;margin-bottom:18px;font-size:14.5px;}
+  #filter-section label{display:flex;align-items:center;gap:12px;cursor:pointer;font-weight:700;font-size:17px;}
+  #filter-section input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--accent);cursor:pointer;}
+  #filter-section .filter-list{margin:8px 0 0 34px;color:rgba(255,255,255,0.75);font-weight:400;font-size:13.5px;}
   .success-box{text-align:center;}
   .success-icon{font-size:42px;text-align:center;margin-bottom:8px;}
   .modal-sub{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;margin-bottom:4px;}
@@ -213,12 +214,12 @@
     <div class="catalog-main">
       <h2 id="catalog-title">All Items</h2>
       <div class="subtext">Set quantities and add items to your order. Grayed-out items are marked out of stock.</div>
+      <div id="filter-section" style="display:none;"></div>
       <div class="search-row"><input type="text" id="search-box" placeholder="Search items by name..."></div>
       <div class="grid" id="product-grid"></div>
     </div>
     <div class="order-sidebar">
       <h3>Your Order</h3>
-      <div id="filter-section" style="display:none;"></div>
       <button id="submit-order-btn" onclick="openReviewModal()">Submit Order</button>
       <div id="cart-items"><div class="cart-empty">No items added yet.</div></div>
       <div class="cart-total-row"><span>Total items</span><span id="cart-count">0</span></div>
