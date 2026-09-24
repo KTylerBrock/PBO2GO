@@ -117,6 +117,30 @@
   .success-box{text-align:center;}
   .success-icon{font-size:42px;text-align:center;margin-bottom:8px;}
   .modal-sub{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;margin-bottom:4px;}
+
+  .admin-view{padding:20px 22px;}
+  .admin-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
+  .admin-toolbar input{padding:9px 12px;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:14px;background:rgba(255,255,255,0.1);color:#fff;min-width:260px;}
+  .admin-toolbar input::placeholder{color:rgba(255,255,255,0.65);}
+  .btn-add{padding:9px 16px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+  .btn-add:hover{background:var(--accent-dark);}
+  .admin-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  .admin-table th{text-align:left;padding:8px 10px;color:rgba(255,255,255,0.6);font-weight:600;font-size:11.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.2);}
+  .admin-table td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.08);vertical-align:middle;}
+  .admin-table img{width:36px;height:36px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:4px;}
+  .admin-table .oos-tag{background:var(--oos);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;}
+  .admin-table button{padding:5px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.1);color:#fff;font-size:12.5px;cursor:pointer;margin-right:6px;}
+  .admin-table button:hover{background:rgba(255,255,255,0.2);}
+  .admin-table button.danger{border-color:#a02f2f;color:#ff9b9b;}
+  .admin-table button.danger:hover{background:rgba(160,47,47,0.25);}
+  #product-modal .modal-box{max-width:420px;}
+  #product-modal .field{margin-bottom:14px;text-align:left;}
+  #product-modal .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
+  #product-modal .field input, #product-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #product-modal .field input[type=file]{padding:6px;}
+  #product-modal .field.checkbox-field{display:flex;align-items:center;gap:8px;}
+  #product-modal .field.checkbox-field label{margin:0;}
+  #product-image-preview{width:70px;height:70px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:6px;margin-bottom:8px;display:none;}
 </style>
 </head>
 <body>
@@ -153,6 +177,7 @@
     <nav>
       <button id="nav-order" class="active" onclick="switchView('order')">Place Order</button>
       <button id="nav-history" onclick="switchView('history')">Order History</button>
+      <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
     </nav>
     <div class="userbox">
       <span id="user-name-label"></span>
@@ -184,6 +209,56 @@
     <div class="subtext" id="history-subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;"></div>
     <div id="history-store-filter" style="margin-bottom:16px;"></div>
     <div id="history-list"></div>
+  </div>
+
+  <div class="admin-view" id="admin-view" style="display:none;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Product Management</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Add, edit, or mark products out of stock.</div>
+    <div class="admin-toolbar">
+      <input type="text" id="admin-search-box" placeholder="Search products...">
+      <button class="btn-add" onclick="openProductModal()">+ Add Product</button>
+    </div>
+    <div id="admin-product-rows"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="product-modal">
+  <div class="modal-box">
+    <h3 id="product-modal-title">Add Product</h3>
+    <img id="product-image-preview" src="" alt="">
+    <div class="field">
+      <label>Name</label>
+      <input type="text" id="product-name">
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <input type="text" id="product-category" list="category-options">
+      <datalist id="category-options"></datalist>
+    </div>
+    <div class="field">
+      <label>Routing Group</label>
+      <select id="product-routing">
+        <option value="PBO">PBO</option>
+        <option value="GNG">GNG</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>VIN</label>
+      <input type="text" id="product-vin">
+    </div>
+    <div class="field">
+      <label>Image</label>
+      <input type="file" id="product-image-file" accept="image/*" onchange="previewProductImage()">
+    </div>
+    <div class="field checkbox-field" id="product-oos-field" style="display:none;">
+      <input type="checkbox" id="product-oos">
+      <label for="product-oos">Out of stock</label>
+    </div>
+    <div class="err" id="product-modal-err"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeProductModal()">Cancel</button>
+      <button class="btn-confirm" id="save-product-btn" onclick="saveProduct()">Save</button>
+    </div>
   </div>
 </div>
 
@@ -223,6 +298,9 @@ let currentStore = null;
 let historyStoreFilterValue = 'ALL';
 let myFilters = [];
 let filtersInCart = false;
+const ADMIN_ROLES = ['owner', 'admin'];
+let editingProductId = null;
+let productImageFile = null;
 
 document.getElementById('login-form').addEventListener('submit', async function(e){
   e.preventDefault();
@@ -255,6 +333,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
   currentStore = profile.store;
   document.getElementById('user-name-label').textContent = profile.name;
   document.getElementById('user-role-badge').textContent = profile.role;
+  document.getElementById('nav-admin').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.querySelector('.view-login').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
   switchView('order');
@@ -335,6 +414,12 @@ document.getElementById('search-box').addEventListener('input', function(e){
 
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+function resolveImageSrc(image_url){
+  if (!image_url) return null;
+  if (image_url.startsWith('http://') || image_url.startsWith('https://')) return image_url;
+  return 'images/' + encodeURIComponent(image_url);
+}
+
 function renderProductGrid(){
   let list = PRODUCTS;
   if (activeCategory !== 'ALL') list = list.filter(p => p.category === activeCategory);
@@ -347,7 +432,8 @@ function renderProductGrid(){
 
   document.getElementById('product-grid').innerHTML = list.map(p => {
     const qty = cart[p.id] || 1;
-    const imgHtml = p.image_url ? `<img src="images/${encodeURIComponent(p.image_url)}" alt="">` : `<div class="noimg">No image on file</div>`;
+    const imgSrc = resolveImageSrc(p.image_url);
+    const imgHtml = imgSrc ? `<img src="${imgSrc}" alt="">` : `<div class="noimg">No image on file</div>`;
     return `<div class="card ${p.out_of_stock?'oos':''}">
       ${p.out_of_stock ? '<div class="oos-badge">Out of Stock</div>' : ''}
       <div class="imgwrap">${imgHtml}</div>
@@ -555,12 +641,14 @@ function closeSuccessModal(){
 }
 
 function switchView(view){
-  const isOrder = view === 'order';
-  document.getElementById('nav-order').classList.toggle('active', isOrder);
-  document.getElementById('nav-history').classList.toggle('active', !isOrder);
-  document.querySelector('.order-layout').style.display = isOrder ? 'grid' : 'none';
-  document.getElementById('history-view').style.display = isOrder ? 'none' : 'block';
-  if (!isOrder) loadHistory();
+  document.getElementById('nav-order').classList.toggle('active', view === 'order');
+  document.getElementById('nav-history').classList.toggle('active', view === 'history');
+  document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
+  document.querySelector('.order-layout').style.display = view === 'order' ? 'grid' : 'none';
+  document.getElementById('history-view').style.display = view === 'history' ? 'block' : 'none';
+  document.getElementById('admin-view').style.display = view === 'admin' ? 'block' : 'none';
+  if (view === 'history') loadHistory();
+  if (view === 'admin') renderAdminProducts();
 }
 
 const TOP4_ROLES = ['owner', 'admin', 'staff'];
@@ -632,6 +720,160 @@ function renderHistoryList(isTop4){
   }).join('');
 }
 
+let adminSearchTerm = '';
+
+document.getElementById('admin-search-box').addEventListener('input', function(e){
+  adminSearchTerm = e.target.value.trim().toLowerCase();
+  renderAdminProducts();
+});
+
+function renderAdminProducts(){
+  let list = PRODUCTS;
+  if (adminSearchTerm) list = list.filter(p => p.name.toLowerCase().includes(adminSearchTerm));
+
+  document.getElementById('admin-product-rows').innerHTML = `<table class="admin-table">
+    <tr><th></th><th>Name</th><th>Category</th><th>Routing</th><th>VIN</th><th>Status</th><th></th></tr>` + list.map(p => {
+    const imgSrc = resolveImageSrc(p.image_url);
+    const imgHtml = imgSrc ? `<img src="${imgSrc}" alt="">` : '';
+    return `<tr>
+      <td>${imgHtml}</td>
+      <td>${escapeHtml(p.name)}</td>
+      <td>${escapeHtml(p.category)}</td>
+      <td>${escapeHtml(p.routing_group || '')}</td>
+      <td>${escapeHtml(p.vin || '')}</td>
+      <td>${p.out_of_stock ? '<span class="oos-tag">Out of Stock</span>' : ''}</td>
+      <td>
+        <button onclick="openProductModal('${p.id}')">Edit</button>
+        <button class="danger" onclick="deleteProduct('${p.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('') + `</table>`;
+}
+
+function openProductModal(id){
+  editingProductId = id || null;
+  productImageFile = null;
+  document.getElementById('product-modal-err').style.display = 'none';
+
+  const categories = Array.from(new Set(PRODUCTS.map(p => p.category))).sort();
+  document.getElementById('category-options').innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">`).join('');
+
+  const preview = document.getElementById('product-image-preview');
+
+  if (editingProductId) {
+    const p = PRODUCTS.find(x => x.id === editingProductId);
+    document.getElementById('product-modal-title').textContent = 'Edit Product';
+    document.getElementById('product-name').value = p.name;
+    document.getElementById('product-category').value = p.category;
+    document.getElementById('product-routing').value = p.routing_group || 'PBO';
+    document.getElementById('product-vin').value = p.vin || '';
+    document.getElementById('product-oos').checked = !!p.out_of_stock;
+    document.getElementById('product-oos-field').style.display = 'flex';
+    const imgSrc = resolveImageSrc(p.image_url);
+    if (imgSrc) { preview.src = imgSrc; preview.style.display = 'block'; }
+    else { preview.style.display = 'none'; }
+  } else {
+    document.getElementById('product-modal-title').textContent = 'Add Product';
+    document.getElementById('product-name').value = '';
+    document.getElementById('product-category').value = '';
+    document.getElementById('product-routing').value = 'PBO';
+    document.getElementById('product-vin').value = '';
+    document.getElementById('product-oos').checked = false;
+    document.getElementById('product-oos-field').style.display = 'none';
+    preview.style.display = 'none';
+  }
+  document.getElementById('product-image-file').value = '';
+  document.getElementById('product-modal').classList.add('active');
+}
+
+function closeProductModal(){
+  document.getElementById('product-modal').classList.remove('active');
+}
+
+function previewProductImage(){
+  const fileInput = document.getElementById('product-image-file');
+  const file = fileInput.files[0];
+  if (!file) return;
+  productImageFile = file;
+  const preview = document.getElementById('product-image-preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+}
+
+async function saveProduct(){
+  const name = document.getElementById('product-name').value.trim();
+  const category = document.getElementById('product-category').value.trim();
+  const routing_group = document.getElementById('product-routing').value;
+  const vin = document.getElementById('product-vin').value.trim();
+  const errBox = document.getElementById('product-modal-err');
+  errBox.style.display = 'none';
+
+  if (!name || !category) {
+    errBox.textContent = 'Name and category are required.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('save-product-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  let image_url = editingProductId ? (PRODUCTS.find(p => p.id === editingProductId).image_url) : null;
+
+  if (productImageFile) {
+    const path = crypto.randomUUID() + '-' + productImageFile.name;
+    const { error: uploadError } = await supabaseClient.storage
+      .from('product-images')
+      .upload(path, productImageFile);
+    if (uploadError) {
+      errBox.textContent = 'Image upload failed: ' + uploadError.message;
+      errBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Save';
+      return;
+    }
+    const { data: urlData } = supabaseClient.storage.from('product-images').getPublicUrl(path);
+    image_url = urlData.publicUrl;
+  }
+
+  const record = { name, category, routing_group, vin, image_url };
+  if (editingProductId) {
+    record.out_of_stock = document.getElementById('product-oos').checked;
+  }
+
+  const query = editingProductId
+    ? supabaseClient.from('products').update(record).eq('id', editingProductId)
+    : supabaseClient.from('products').insert(record);
+
+  const { error } = await query;
+
+  btn.disabled = false;
+  btn.textContent = 'Save';
+
+  if (error) {
+    errBox.textContent = 'Could not save: ' + error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+
+  closeProductModal();
+  await loadProducts();
+  renderAdminProducts();
+}
+
+async function deleteProduct(id){
+  const p = PRODUCTS.find(x => x.id === id);
+  if (!confirm('Delete "' + p.name + '" from the catalog entirely?')) return;
+
+  const { error } = await supabaseClient.from('products').delete().eq('id', id);
+  if (error) {
+    alert('Could not delete: ' + error.message);
+    return;
+  }
+  await loadProducts();
+  renderAdminProducts();
+}
+
 function logout(){
   supabaseClient.auth.signOut();
   currentUserId = null;
@@ -648,8 +890,15 @@ function logout(){
   document.getElementById('history-store-filter').innerHTML = '';
   document.getElementById('filter-section').innerHTML = '';
   document.getElementById('filter-section').style.display = 'none';
+  document.getElementById('nav-admin').style.display = 'none';
+  document.getElementById('admin-product-rows').innerHTML = '';
+  document.getElementById('admin-search-box').value = '';
+  adminSearchTerm = '';
+  editingProductId = null;
+  productImageFile = null;
   closeReviewModal();
   closeSuccessModal();
+  closeProductModal();
   document.getElementById('app-shell').style.display = 'none';
   document.querySelector('.view-login').style.display = 'block';
   document.getElementById('login-form').reset();
