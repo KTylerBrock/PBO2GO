@@ -144,6 +144,20 @@
   #product-modal .field.checkbox-field input{width:auto;flex:none;}
   #product-modal .field.checkbox-field label{display:inline;margin:0;}
   #product-image-preview{width:70px;height:70px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:6px;margin-bottom:8px;display:none;}
+
+  .request-card{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:14px 18px;margin-bottom:14px;}
+  .request-card .req-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+  .request-card .req-name{font-size:15px;font-weight:800;}
+  .request-card .req-meta{font-size:12px;color:rgba(255,255,255,0.6);}
+  .request-card .req-detail{font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:4px;}
+  .request-card .req-actions{margin-top:10px;display:flex;gap:8px;}
+  .status-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.3px;}
+  .status-tag.pending{background:#8a6d1a;color:#fff;}
+  .status-tag.approved{background:#1a7a4a;color:#fff;}
+  .status-tag.rejected{background:#a02f2f;color:#fff;}
+  #request-view .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
+  #request-view .field input{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #request-view .field input::placeholder{color:rgba(255,255,255,0.45);}
 </style>
 </head>
 <body>
@@ -180,6 +194,8 @@
     <nav>
       <button id="nav-order" class="active" onclick="switchView('order')">Place Order</button>
       <button id="nav-history" onclick="switchView('history')">Order History</button>
+      <button id="nav-request" onclick="switchView('request')" style="display:none;">Request Product</button>
+      <button id="nav-requests" onclick="switchView('requests')" style="display:none;">Product Requests</button>
       <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
     </nav>
     <div class="userbox">
@@ -222,6 +238,42 @@
       <button class="btn-add" onclick="openProductModal()">+ Add Product</button>
     </div>
     <div id="admin-product-rows"></div>
+  </div>
+
+  <div class="admin-view" id="request-view" style="display:none;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Request a New Product</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Suggest a product for Kevin or Abby to review and add.</div>
+    <div style="max-width:420px;">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="request-name">
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <input type="text" id="request-category" list="category-options">
+      </div>
+      <div class="field">
+        <label>Image URL (optional)</label>
+        <input type="text" id="request-image-url" placeholder="Link to a photo, if you have one">
+      </div>
+      <div class="field">
+        <label>Notes</label>
+        <input type="text" id="request-notes" placeholder="Anything else Kevin/Abby should know">
+      </div>
+      <div class="err" id="request-err"></div>
+      <button class="btn-add" onclick="submitProductRequest()">Submit Request</button>
+    </div>
+    <h3 style="margin:28px 0 10px;font-size:16px;">Your Requests</h3>
+    <div id="my-requests-list"></div>
+  </div>
+
+  <div class="admin-view" id="requests-view" style="display:none;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Product Requests</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Review products suggested by staff.</div>
+    <h3 style="margin:0 0 10px;font-size:16px;">Pending</h3>
+    <div id="pending-requests-list"></div>
+    <h3 style="margin:28px 0 10px;font-size:16px;">Reviewed</h3>
+    <div id="reviewed-requests-list"></div>
   </div>
 </div>
 
@@ -340,6 +392,8 @@ document.getElementById('login-form').addEventListener('submit', async function(
   document.getElementById('user-name-label').textContent = profile.name;
   document.getElementById('user-role-badge').textContent = roleLabel(profile.role);
   document.getElementById('nav-admin').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
+  document.getElementById('nav-request').style.display = profile.role === 'staff' ? 'inline-block' : 'none';
+  document.getElementById('nav-requests').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.querySelector('.view-login').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
   switchView('order');
@@ -649,12 +703,18 @@ function closeSuccessModal(){
 function switchView(view){
   document.getElementById('nav-order').classList.toggle('active', view === 'order');
   document.getElementById('nav-history').classList.toggle('active', view === 'history');
+  document.getElementById('nav-request').classList.toggle('active', view === 'request');
+  document.getElementById('nav-requests').classList.toggle('active', view === 'requests');
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
   document.querySelector('.order-layout').style.display = view === 'order' ? 'grid' : 'none';
   document.getElementById('history-view').style.display = view === 'history' ? 'block' : 'none';
+  document.getElementById('request-view').style.display = view === 'request' ? 'block' : 'none';
+  document.getElementById('requests-view').style.display = view === 'requests' ? 'block' : 'none';
   document.getElementById('admin-view').style.display = view === 'admin' ? 'block' : 'none';
   if (view === 'history') loadHistory();
   if (view === 'admin') renderAdminProducts();
+  if (view === 'request') loadRequestView();
+  if (view === 'requests') loadRequestsQueue();
 }
 
 const TOP4_ROLES = ['owner', 'admin', 'staff'];
@@ -756,13 +816,16 @@ function renderAdminProducts(){
   }).join('') + `</table>`;
 }
 
+function populateCategoryOptions(){
+  const categories = Array.from(new Set(PRODUCTS.map(p => p.category))).sort();
+  document.getElementById('category-options').innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">`).join('');
+}
+
 function openProductModal(id){
   editingProductId = id || null;
   productImageFile = null;
   document.getElementById('product-modal-err').style.display = 'none';
-
-  const categories = Array.from(new Set(PRODUCTS.map(p => p.category))).sort();
-  document.getElementById('category-options').innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">`).join('');
+  populateCategoryOptions();
 
   const preview = document.getElementById('product-image-preview');
 
@@ -880,6 +943,156 @@ async function deleteProduct(id){
   renderAdminProducts();
 }
 
+function loadRequestView(){
+  populateCategoryOptions();
+  loadMyRequests();
+}
+
+async function submitProductRequest(){
+  const name = document.getElementById('request-name').value.trim();
+  const category = document.getElementById('request-category').value.trim();
+  const image_url = document.getElementById('request-image-url').value.trim() || null;
+  const notes = document.getElementById('request-notes').value.trim() || null;
+  const errBox = document.getElementById('request-err');
+  errBox.style.display = 'none';
+
+  if (!name) {
+    errBox.textContent = 'Name is required.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const { error } = await supabaseClient.from('product_requests').insert({
+    requested_by: currentUserId, name, category, image_url, notes
+  });
+
+  if (error) {
+    errBox.textContent = 'Could not submit: ' + error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+
+  document.getElementById('request-name').value = '';
+  document.getElementById('request-category').value = '';
+  document.getElementById('request-image-url').value = '';
+  document.getElementById('request-notes').value = '';
+  loadMyRequests();
+}
+
+async function loadMyRequests(){
+  const { data, error } = await supabaseClient
+    .from('product_requests')
+    .select('id, name, category, notes, status, created_at')
+    .eq('requested_by', currentUserId)
+    .order('created_at', { ascending: false });
+
+  const container = document.getElementById('my-requests-list');
+  if (error) {
+    container.innerHTML = '<div style="color:#ff8080;">Could not load your requests: ' + error.message + '</div>';
+    return;
+  }
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div style="color:rgba(255,255,255,0.6);">No requests submitted yet.</div>';
+    return;
+  }
+
+  container.innerHTML = data.map(r => `<div class="request-card">
+    <div class="req-head">
+      <span class="req-name">${escapeHtml(r.name)}</span>
+      <span class="status-tag ${r.status}">${escapeHtml(r.status)}</span>
+    </div>
+    <div class="req-detail">${escapeHtml(r.category || '')}</div>
+    ${r.notes ? `<div class="req-detail">${escapeHtml(r.notes)}</div>` : ''}
+    <div class="req-meta">${new Date(r.created_at).toLocaleString()}</div>
+  </div>`).join('');
+}
+
+async function loadRequestsQueue(){
+  const { data, error } = await supabaseClient
+    .from('product_requests')
+    .select('id, name, category, image_url, notes, status, created_at, managers!product_requests_requested_by_fkey(name, store)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    document.getElementById('pending-requests-list').innerHTML = '<div style="color:#ff8080;">Could not load requests: ' + error.message + '</div>';
+    document.getElementById('reviewed-requests-list').innerHTML = '';
+    return;
+  }
+
+  renderPendingRequests(data.filter(r => r.status === 'pending'));
+  renderReviewedRequests(data.filter(r => r.status !== 'pending'));
+}
+
+function renderPendingRequests(list){
+  const container = document.getElementById('pending-requests-list');
+  if (list.length === 0) {
+    container.innerHTML = '<div style="color:rgba(255,255,255,0.6);">Nothing pending.</div>';
+    return;
+  }
+  container.innerHTML = list.map(r => {
+    const who = r.managers ? escapeHtml(r.managers.name) + ' &mdash; ' + escapeHtml(r.managers.store) : '';
+    return `<div class="request-card">
+      <div class="req-head">
+        <span class="req-name">${escapeHtml(r.name)}</span>
+        <span class="req-meta">${new Date(r.created_at).toLocaleString()}</span>
+      </div>
+      <div class="req-detail">${who}</div>
+      <div class="req-detail">Category: ${escapeHtml(r.category || '')}</div>
+      ${r.image_url ? `<div class="req-detail">Image: <a href="${escapeHtml(r.image_url)}" target="_blank" rel="noopener" style="color:var(--accent-light);">${escapeHtml(r.image_url)}</a></div>` : ''}
+      ${r.notes ? `<div class="req-detail">${escapeHtml(r.notes)}</div>` : ''}
+      <div class="req-actions">
+        <button class="btn-add" onclick="approveRequest('${r.id}', '${escapeHtml(r.name).replace(/'/g,"\\'")}', '${escapeHtml(r.category || '').replace(/'/g,"\\'")}')">Approve</button>
+        <button onclick="rejectRequest('${r.id}')" style="padding:9px 16px;border-radius:6px;border:1px solid #a02f2f;background:rgba(160,47,47,0.2);color:#ff9b9b;font-size:14px;cursor:pointer;">Reject</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderReviewedRequests(list){
+  const container = document.getElementById('reviewed-requests-list');
+  if (list.length === 0) {
+    container.innerHTML = '<div style="color:rgba(255,255,255,0.6);">Nothing reviewed yet.</div>';
+    return;
+  }
+  container.innerHTML = list.map(r => {
+    const who = r.managers ? escapeHtml(r.managers.name) + ' &mdash; ' + escapeHtml(r.managers.store) : '';
+    return `<div class="request-card">
+      <div class="req-head">
+        <span class="req-name">${escapeHtml(r.name)}</span>
+        <span class="status-tag ${r.status}">${escapeHtml(r.status)}</span>
+      </div>
+      <div class="req-detail">${who}</div>
+    </div>`;
+  }).join('');
+}
+
+async function approveRequest(id, name, category){
+  const { error } = await supabaseClient
+    .from('product_requests')
+    .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    alert('Could not approve: ' + error.message);
+    return;
+  }
+  await loadRequestsQueue();
+  openProductModal();
+  document.getElementById('product-name').value = name;
+  document.getElementById('product-category').value = category;
+}
+
+async function rejectRequest(id){
+  const { error } = await supabaseClient
+    .from('product_requests')
+    .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    alert('Could not reject: ' + error.message);
+    return;
+  }
+  await loadRequestsQueue();
+}
+
 function logout(){
   supabaseClient.auth.signOut();
   currentUserId = null;
@@ -897,8 +1110,17 @@ function logout(){
   document.getElementById('filter-section').innerHTML = '';
   document.getElementById('filter-section').style.display = 'none';
   document.getElementById('nav-admin').style.display = 'none';
+  document.getElementById('nav-request').style.display = 'none';
+  document.getElementById('nav-requests').style.display = 'none';
   document.getElementById('admin-product-rows').innerHTML = '';
   document.getElementById('admin-search-box').value = '';
+  document.getElementById('my-requests-list').innerHTML = '';
+  document.getElementById('pending-requests-list').innerHTML = '';
+  document.getElementById('reviewed-requests-list').innerHTML = '';
+  document.getElementById('request-name').value = '';
+  document.getElementById('request-category').value = '';
+  document.getElementById('request-image-url').value = '';
+  document.getElementById('request-notes').value = '';
   adminSearchTerm = '';
   editingProductId = null;
   productImageFile = null;
