@@ -302,6 +302,9 @@ let historyStoreFilterValue = 'ALL';
 let myFilters = [];
 let filtersInCart = false;
 const ADMIN_ROLES = ['owner', 'admin'];
+function roleLabel(role){
+  return role === 'owner' ? 'Lead Site Admin' : role;
+}
 let editingProductId = null;
 let productImageFile = null;
 
@@ -335,7 +338,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
   currentRole = profile.role;
   currentStore = profile.store;
   document.getElementById('user-name-label').textContent = profile.name;
-  document.getElementById('user-role-badge').textContent = profile.role;
+  document.getElementById('user-role-badge').textContent = roleLabel(profile.role);
   document.getElementById('nav-admin').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.querySelector('.view-login').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
