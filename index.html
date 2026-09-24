@@ -92,6 +92,24 @@
   .order-card th{text-align:left;padding:5px 8px;color:rgba(255,255,255,0.6);font-weight:600;font-size:11.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.15);}
   .order-card td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.08);}
   #history-store-filter select{padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:13.5px;}
+
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;z-index:100;}
+  .modal-overlay.active{display:flex;}
+  .modal-box{background:#151b26;border:1px solid rgba(255,255,255,0.15);border-radius:10px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;padding:24px 26px;color:#fff;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+  .modal-box h3{margin:0 0 16px;font-size:18px;}
+  .modal-line{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.1);font-size:14px;gap:8px;}
+  .modal-line .remove{color:#fff;cursor:pointer;font-size:14px;background:none;border:none;padding:0;}
+  .modal-empty{font-size:13px;text-align:center;padding:20px 0;color:rgba(255,255,255,0.7);}
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .modal-actions button{flex:1;padding:10px;border-radius:6px;border:none;font-size:14px;font-weight:700;cursor:pointer;}
+  .modal-actions .btn-confirm{background:var(--accent);color:#fff;}
+  .modal-actions .btn-confirm:hover{background:var(--accent-dark);}
+  .modal-actions .btn-confirm:disabled{background:var(--oos);cursor:not-allowed;}
+  .modal-actions .btn-cancel{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.25);}
+  .modal-actions .btn-cancel:hover{background:rgba(255,255,255,0.18);}
+  .success-box{text-align:center;}
+  .success-icon{font-size:42px;text-align:center;margin-bottom:8px;}
+  .modal-sub{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;margin-bottom:4px;}
 </style>
 </head>
 <body>
@@ -146,7 +164,7 @@
     </div>
     <div class="order-sidebar">
       <h3>Your Order</h3>
-      <button id="submit-order-btn" onclick="submitOrder()">Submit Order</button>
+      <button id="submit-order-btn" onclick="openReviewModal()">Submit Order</button>
       <div id="cart-items"><div class="cart-empty">No items added yet.</div></div>
       <div class="cart-total-row"><span>Total items</span><span id="cart-count">0</span></div>
       <div class="note">Submitting creates a real order in the system.</div>
@@ -158,6 +176,26 @@
     <div class="subtext" id="history-subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;"></div>
     <div id="history-store-filter" style="margin-bottom:16px;"></div>
     <div id="history-list"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="review-modal">
+  <div class="modal-box">
+    <h3>Review Your Order</h3>
+    <div id="review-items"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeReviewModal()">Back to Order</button>
+      <button class="btn-confirm" id="confirm-submit-btn" onclick="confirmSubmitOrder()">Confirm &amp; Submit</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="success-modal">
+  <div class="modal-box success-box">
+    <div class="success-icon">&#9989;</div>
+    <h3>Order Submitted</h3>
+    <p class="modal-sub" id="success-message"></p>
+    <div class="modal-actions"><button class="btn-confirm" onclick="closeSuccessModal()">Done</button></div>
   </div>
 </div>
 
@@ -334,14 +372,51 @@ function renderCart(){
   countSpan.textContent = String(totalItems);
 }
 
-async function submitOrder(){
-  const ids = Object.keys(orderCart);
-  if (ids.length === 0) {
+function openReviewModal(){
+  if (Object.keys(orderCart).length === 0) {
     alert('Your order is empty — add some items first.');
     return;
   }
+  renderReviewItems();
+  document.getElementById('review-modal').classList.add('active');
+}
 
-  const btn = document.getElementById('submit-order-btn');
+function closeReviewModal(){
+  document.getElementById('review-modal').classList.remove('active');
+}
+
+function removeFromReview(id){
+  delete orderCart[id];
+  renderCart();
+  renderReviewItems();
+  if (Object.keys(orderCart).length === 0) closeReviewModal();
+}
+
+function renderReviewItems(){
+  const ids = Object.keys(orderCart);
+  const container = document.getElementById('review-items');
+  if (ids.length === 0) {
+    container.innerHTML = '<div class="modal-empty">No items added yet.</div>';
+    return;
+  }
+  container.innerHTML = ids.map(id => {
+    const p = PRODUCTS.find(x => x.id === id);
+    if (!p) return '';
+    return `<div class="modal-line">
+      <span>${escapeHtml(p.name)} &times; ${orderCart[id]}</span>
+      <button class="remove" onclick="removeFromReview('${id}')">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+async function confirmSubmitOrder(){
+  const ids = Object.keys(orderCart);
+  if (ids.length === 0) {
+    closeReviewModal();
+    return;
+  }
+
+  const btn = document.getElementById('confirm-submit-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
@@ -354,7 +429,7 @@ async function submitOrder(){
   if (orderError) {
     alert('Could not create order: ' + orderError.message);
     btn.disabled = false;
-    btn.textContent = 'Submit Order';
+    btn.textContent = 'Confirm & Submit';
     return;
   }
 
@@ -373,16 +448,22 @@ async function submitOrder(){
   const { error: itemsError } = await supabaseClient.from('order_items').insert(items);
 
   btn.disabled = false;
-  btn.textContent = 'Submit Order';
+  btn.textContent = 'Confirm & Submit';
 
   if (itemsError) {
     alert('Order was created but items failed to save: ' + itemsError.message);
     return;
   }
 
-  alert('Order #' + order.order_number + ' submitted successfully.');
   orderCart = {};
   renderCart();
+  closeReviewModal();
+  document.getElementById('success-message').textContent = 'Order #' + order.order_number + ' has been submitted.';
+  document.getElementById('success-modal').classList.add('active');
+}
+
+function closeSuccessModal(){
+  document.getElementById('success-modal').classList.remove('active');
 }
 
 function switchView(view){
@@ -475,6 +556,8 @@ function logout(){
   document.getElementById('history-list').innerHTML = '';
   document.getElementById('history-subtext').textContent = '';
   document.getElementById('history-store-filter').innerHTML = '';
+  closeReviewModal();
+  closeSuccessModal();
   document.getElementById('app-shell').style.display = 'none';
   document.querySelector('.view-login').style.display = 'block';
   document.getElementById('login-form').reset();
