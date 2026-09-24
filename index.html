@@ -96,6 +96,7 @@
   .order-card th:nth-child(3), .order-card td:nth-child(3){width:16%;}
   .order-card th:nth-child(4), .order-card td:nth-child(4){width:12%;}
   #history-store-filter select{padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:13.5px;}
+  #history-store-filter select option{background:#151b26;color:#fff;}
 
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;z-index:100;}
   .modal-overlay.active{display:flex;}
@@ -136,10 +137,12 @@
   #product-modal .modal-box{max-width:420px;}
   #product-modal .field{margin-bottom:14px;text-align:left;}
   #product-modal .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
-  #product-modal .field input, #product-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #product-modal .field input:not([type=checkbox]), #product-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #product-modal .field select option{background:#151b26;color:#fff;}
   #product-modal .field input[type=file]{padding:6px;}
   #product-modal .field.checkbox-field{display:flex;align-items:center;gap:8px;}
-  #product-modal .field.checkbox-field label{margin:0;}
+  #product-modal .field.checkbox-field input{width:auto;flex:none;}
+  #product-modal .field.checkbox-field label{display:inline;margin:0;}
   #product-image-preview{width:70px;height:70px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:6px;margin-bottom:8px;display:none;}
 </style>
 </head>
