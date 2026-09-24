@@ -88,9 +88,13 @@
   .order-card .order-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
   .order-card .order-head .order-num{font-size:16px;font-weight:800;}
   .order-card .order-head .order-meta{font-size:12.5px;color:rgba(255,255,255,0.7);}
-  .order-card table{width:100%;border-collapse:collapse;font-size:13px;}
+  .order-card table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;}
   .order-card th{text-align:left;padding:5px 8px;color:rgba(255,255,255,0.6);font-weight:600;font-size:11.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.15);}
-  .order-card td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .order-card td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.08);word-break:break-word;}
+  .order-card th:nth-child(1), .order-card td:nth-child(1){width:52%;}
+  .order-card th:nth-child(2), .order-card td:nth-child(2){width:20%;}
+  .order-card th:nth-child(3), .order-card td:nth-child(3){width:16%;}
+  .order-card th:nth-child(4), .order-card td:nth-child(4){width:12%;}
   #history-store-filter select{padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:13.5px;}
 
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;z-index:100;}
