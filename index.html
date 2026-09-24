@@ -732,6 +732,10 @@ let historyHasMore = true;
 let historyIsTop4 = false;
 let historyStoreOptions = null;
 
+function siteLabel(m){
+  return m && m.site_number ? m.site_number + ' — ' + m.store : (m ? m.store : '');
+}
+
 async function loadHistory(){
   historyIsTop4 = TOP4_ROLES.includes(currentRole);
   document.getElementById('history-subtext').textContent = historyIsTop4
@@ -739,8 +743,8 @@ async function loadHistory(){
     : 'Showing your store\'s past orders.';
 
   if (historyIsTop4 && !historyStoreOptions) {
-    const { data } = await supabaseClient.from('managers').select('store').eq('role', 'manager').order('store');
-    historyStoreOptions = Array.from(new Set((data || []).map(m => m.store)));
+    const { data } = await supabaseClient.from('managers').select('store, site_number').eq('role', 'manager').order('site_number');
+    historyStoreOptions = (data || []).concat([{ store: 'Corporate', site_number: null }]);
   }
   renderHistoryStoreFilter();
 
@@ -757,7 +761,7 @@ function renderHistoryStoreFilter(){
 
   container.innerHTML = `<select onchange="historyStoreFilterValue=this.value; reloadHistoryForFilter()">
     <option value="ALL">All Stores</option>
-    ${historyStoreOptions.map(s => `<option value="${escapeHtml(s)}" ${historyStoreFilterValue===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}
+    ${historyStoreOptions.map(s => `<option value="${escapeHtml(s.store)}" ${historyStoreFilterValue===s.store?'selected':''}>${escapeHtml(siteLabel(s))}</option>`).join('')}
   </select>`;
 }
 
@@ -772,7 +776,7 @@ async function reloadHistoryForFilter(){
 async function fetchHistoryPage(){
   let query = supabaseClient
     .from('orders')
-    .select('id, order_number, created_at, managers!inner(name, store), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+    .select('id, order_number, created_at, managers!inner(name, store, site_number), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
     .order('created_at', { ascending: false })
     .range(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE - 1);
 
@@ -811,8 +815,12 @@ function renderHistoryList(){
     const when = new Date(o.created_at).toLocaleString();
     let storeLabel = '';
     if (historyIsTop4 && o.managers) {
-      storeLabel = ' &mdash; ' + escapeHtml(o.managers.name);
-      if (o.managers.name !== o.managers.store) storeLabel += ' (' + escapeHtml(o.managers.store) + ')';
+      if (o.managers.site_number) {
+        storeLabel = ' &mdash; ' + escapeHtml(siteLabel(o.managers));
+      } else {
+        storeLabel = ' &mdash; ' + escapeHtml(o.managers.name);
+        if (o.managers.name !== o.managers.store) storeLabel += ' (' + escapeHtml(o.managers.store) + ')';
+      }
     }
     const rows = o.order_items.map(oi => `<tr>
       <td>${escapeHtml(oi.product_name_snapshot)}</td>
