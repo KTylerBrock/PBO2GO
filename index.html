@@ -168,6 +168,10 @@
   #account-modal .field input, #account-modal .field select{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
   #account-modal .field input:disabled{opacity:0.6;}
   #account-modal .field select option{background:#151b26;color:#fff;}
+
+  #profile-view .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
+  #profile-view .field input{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
+  #profile-view .field input:disabled{opacity:0.6;}
 </style>
 </head>
 <body>
@@ -208,6 +212,7 @@
       <button id="nav-requests" onclick="switchView('requests')" style="display:none;">Product Requests</button>
       <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
       <button id="nav-accounts" onclick="switchView('accounts')" style="display:none;">Accounts</button>
+      <button id="nav-profile" onclick="switchView('profile')">My Profile</button>
     </nav>
     <div class="userbox">
       <span id="user-name-label"></span>
@@ -297,6 +302,31 @@
       <input type="text" id="accounts-search-box" placeholder="Search accounts...">
     </div>
     <div id="accounts-rows"></div>
+  </div>
+
+  <div class="admin-view" id="profile-view" style="display:none;">
+    <h2 style="margin:0 0 4px;font-size:20px;">My Profile</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Update your own name and phone number.</div>
+    <div style="max-width:420px;">
+      <div class="field">
+        <label>Name</label>
+        <input type="text" id="profile-name">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="text" id="profile-email" disabled>
+      </div>
+      <div class="field">
+        <label>Store</label>
+        <input type="text" id="profile-store" disabled>
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input type="tel" id="profile-phone">
+      </div>
+      <div class="err" id="profile-err"></div>
+      <button class="btn-add" id="save-profile-btn" onclick="saveProfile()">Save Changes</button>
+    </div>
   </div>
 </div>
 
@@ -779,17 +809,20 @@ function switchView(view){
   document.getElementById('nav-requests').classList.toggle('active', view === 'requests');
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
   document.getElementById('nav-accounts').classList.toggle('active', view === 'accounts');
+  document.getElementById('nav-profile').classList.toggle('active', view === 'profile');
   document.querySelector('.order-layout').style.display = view === 'order' ? 'grid' : 'none';
   document.getElementById('history-view').style.display = view === 'history' ? 'block' : 'none';
   document.getElementById('request-view').style.display = view === 'request' ? 'block' : 'none';
   document.getElementById('requests-view').style.display = view === 'requests' ? 'block' : 'none';
   document.getElementById('admin-view').style.display = view === 'admin' ? 'block' : 'none';
   document.getElementById('accounts-view').style.display = view === 'accounts' ? 'block' : 'none';
+  document.getElementById('profile-view').style.display = view === 'profile' ? 'block' : 'none';
   if (view === 'history') loadHistory();
   if (view === 'admin') renderAdminProducts();
   if (view === 'request') loadRequestView();
   if (view === 'requests') loadRequestsQueue();
   if (view === 'accounts') loadAccounts();
+  if (view === 'profile') loadProfileView();
 }
 
 const TOP4_ROLES = ['owner', 'admin', 'staff'];
@@ -1216,6 +1249,56 @@ function closePasswordModal(){
   document.getElementById('password-modal').classList.remove('active');
 }
 
+async function loadProfileView(){
+  document.getElementById('profile-err').style.display = 'none';
+  const { data, error } = await supabaseClient
+    .from('managers')
+    .select('name, email, store, phone')
+    .eq('id', currentUserId)
+    .single();
+
+  if (error) {
+    document.getElementById('profile-err').textContent = 'Could not load your profile: ' + error.message;
+    document.getElementById('profile-err').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('profile-name').value = data.name;
+  document.getElementById('profile-email').value = data.email;
+  document.getElementById('profile-store').value = data.store || '';
+  document.getElementById('profile-phone').value = data.phone || '';
+}
+
+async function saveProfile(){
+  const name = document.getElementById('profile-name').value.trim();
+  const phone = document.getElementById('profile-phone').value.trim() || null;
+  const errBox = document.getElementById('profile-err');
+  errBox.style.display = 'none';
+
+  if (!name) {
+    errBox.textContent = 'Name is required.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('save-profile-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const { error } = await supabaseClient.from('managers').update({ name, phone }).eq('id', currentUserId);
+
+  btn.disabled = false;
+  btn.textContent = 'Save Changes';
+
+  if (error) {
+    errBox.textContent = 'Could not save: ' + error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+
+  document.getElementById('user-name-label').textContent = name;
+}
+
 function loadRequestView(){
   populateCategoryOptions();
   loadMyRequests();
@@ -1402,6 +1485,11 @@ function logout(){
   document.getElementById('request-notes').value = '';
   document.getElementById('accounts-rows').innerHTML = '';
   document.getElementById('accounts-search-box').value = '';
+  document.getElementById('profile-name').value = '';
+  document.getElementById('profile-email').value = '';
+  document.getElementById('profile-store').value = '';
+  document.getElementById('profile-phone').value = '';
+  document.getElementById('profile-err').style.display = 'none';
   adminSearchTerm = '';
   accountsSearchTerm = '';
   editingProductId = null;
