@@ -86,6 +86,7 @@
   .cart-total-row{display:flex;justify-content:space-between;font-size:13.5px;font-weight:700;padding:10px 0;border-top:1px solid rgba(255,255,255,0.1);margin-bottom:10px;}
   #submit-order-btn{width:100%;margin-bottom:16px;padding:11px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;}
   .note{font-size:11.5px;color:rgba(255,255,255,0.6);margin-top:10px;}
+  .mobile-cart-bar{display:none;}
 
   .order-card{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);}
   .order-card .order-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
@@ -198,6 +199,42 @@
   #profile-view .field label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:rgba(255,255,255,0.8);}
   #profile-view .field input{width:100%;padding:8px 10px;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font-size:13.5px;background:rgba(255,255,255,0.08);color:#fff;}
   #profile-view .field input:disabled{opacity:0.6;}
+
+  /* ===== Phone-width layout — only kicks in below 760px, desktop/tablet are untouched ===== */
+  @media (max-width: 760px){
+    header.topbar{padding:0 12px;}
+    header.topbar .topbar-title{font-size:14px;}
+    header.topbar .userbox{gap:8px;}
+    header.topbar .userbox #user-name-label{display:none;}
+
+    .order-layout{display:block;min-height:auto;padding-bottom:76px;}
+    .cat-sidebar{position:static;max-height:none;overflow-y:visible;overflow-x:auto;white-space:nowrap;border-right:none;border-bottom:1px solid rgba(255,255,255,0.1);padding:10px 12px;-webkit-overflow-scrolling:touch;}
+    .cat-sidebar button{display:inline-block;width:auto;border-left:none;border-radius:6px;padding:8px 12px;margin-right:4px;}
+    .cat-sidebar button.active{border-left:none;}
+    .cat-sidebar .count{float:none;margin-left:6px;}
+
+    .catalog-main{padding:16px;}
+    .search-row input{max-width:none;}
+    .grid{grid-template-columns:repeat(2,1fr);gap:14px;}
+
+    .order-sidebar{position:static;max-height:none;border-left:none;border-top:1px solid rgba(255,255,255,0.1);}
+
+    .mobile-cart-bar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(15,20,25,0.97);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid rgba(255,255,255,0.18);padding:12px 16px;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -6px 20px rgba(0,0,0,0.35);}
+    .mobile-cart-bar span{font-size:13px;font-weight:600;}
+    .mobile-cart-bar button{padding:10px 16px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;flex-shrink:0;}
+
+    .modal-overlay{padding:16px;}
+    .admin-view{padding:16px;}
+    #admin-product-rows, #accounts-rows{overflow-x:auto;}
+    .admin-table{min-width:600px;}
+
+    .history-view{padding:16px !important;}
+    .order-card th{font-size:9.5px;padding:5px 3px;}
+    .order-card td{font-size:11.5px;padding:6px 3px;}
+  }
+  @media (max-width: 460px){
+    .grid{grid-template-columns:1fr;}
+  }
 </style>
 </head>
 <body>
@@ -263,6 +300,11 @@
       <div class="cart-total-row"><span>Total items</span><span id="cart-count">0</span></div>
       <div class="note">Submitting creates a real order in the system.</div>
     </div>
+  </div>
+
+  <div class="mobile-cart-bar" id="mobile-cart-bar" style="display:none;">
+    <span id="mobile-cart-count">No items yet</span>
+    <button onclick="openReviewModal()">Review &amp; Submit</button>
   </div>
 
   <div class="history-view" id="history-view" style="display:none;padding:20px 22px;">
@@ -726,6 +768,7 @@ function renderCart(){
   if (ids.length === 0 && !filtersInCart) {
     cartItemsDiv.innerHTML = '<div class="cart-empty">No items added yet.</div>';
     countSpan.textContent = '0';
+    document.getElementById('mobile-cart-count').textContent = 'No items yet';
     return;
   }
 
@@ -751,6 +794,7 @@ function renderCart(){
 
   cartItemsDiv.innerHTML = html;
   countSpan.textContent = String(totalItems);
+  document.getElementById('mobile-cart-count').textContent = totalItems + (totalItems === 1 ? ' item' : ' items') + ' in your order';
 }
 
 function removeFiltersFromCart(){
@@ -890,7 +934,8 @@ function switchView(view){
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
   document.getElementById('nav-accounts').classList.toggle('active', view === 'accounts');
   document.getElementById('nav-profile').classList.toggle('active', view === 'profile');
-  document.querySelector('.order-layout').style.display = view === 'order' ? 'grid' : 'none';
+  document.querySelector('.order-layout').style.display = view === 'order' ? '' : 'none';
+  document.getElementById('mobile-cart-bar').style.display = view === 'order' ? '' : 'none';
   document.getElementById('history-view').style.display = view === 'history' ? 'block' : 'none';
   document.getElementById('request-view').style.display = view === 'request' ? 'block' : 'none';
   document.getElementById('requests-view').style.display = view === 'requests' ? 'block' : 'none';
