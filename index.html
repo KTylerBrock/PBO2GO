@@ -1343,13 +1343,19 @@ async function loadAccounts(){
   const { data, error } = await supabaseClient
     .from('managers')
     .select('id, name, email, phone, store, role, site_number, is_protected')
-    .order('role')
     .order('name');
 
   if (error) {
     document.getElementById('accounts-rows').innerHTML = '<div style="color:#ff8080;">Could not load accounts: ' + error.message + '</div>';
     return;
   }
+
+  const ROLE_SORT_ORDER = { owner: 0, admin: 1, staff: 2, manager: 3 };
+  data.sort((a, b) => {
+    const r = ROLE_SORT_ORDER[a.role] - ROLE_SORT_ORDER[b.role];
+    return r !== 0 ? r : a.name.localeCompare(b.name);
+  });
+
   ACCOUNTS = data;
   renderAccounts();
 }
