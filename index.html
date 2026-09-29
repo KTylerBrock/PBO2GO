@@ -322,7 +322,7 @@
     <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Add, edit, or mark products out of stock.</div>
     <div class="admin-toolbar">
       <input type="text" id="admin-search-box" placeholder="Search products...">
-      <button class="btn-add" onclick="openProductModal()">+ Add Product</button>
+      <button class="btn-add" id="add-product-btn" onclick="openProductModal()">+ Add Product</button>
     </div>
     <div id="admin-product-rows"></div>
   </div>
@@ -497,6 +497,7 @@
         <option value="staff">Staff</option>
         <option value="admin">Admin</option>
         <option value="owner">Owner</option>
+        <option value="viewer">Viewer (read-only demo)</option>
       </select>
     </div>
     <div class="field" id="new-account-store-field">
@@ -575,8 +576,8 @@ let currentStore = null;
 let historyStoreFilterValue = 'ALL';
 let myFilters = [];
 let filtersInCart = false;
-const ADMIN_ROLES = ['owner', 'admin'];
-const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager' };
+const ADMIN_ROLES = ['owner', 'admin', 'viewer'];
+const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager', viewer: 'Viewer' };
 function roleLabel(role){
   return ROLE_LABELS[role] || role;
 }
@@ -863,6 +864,12 @@ async function confirmSubmitOrder(){
     return;
   }
 
+  if (currentRole === 'viewer') {
+    alert("This is a demo account, so it can't place real orders — feel free to keep exploring everything else!");
+    closeReviewModal();
+    return;
+  }
+
   const btn = document.getElementById('confirm-submit-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting...';
@@ -950,7 +957,7 @@ function switchView(view){
   if (view === 'profile') loadProfileView();
 }
 
-const TOP4_ROLES = ['owner', 'admin', 'staff'];
+const TOP4_ROLES = ['owner', 'admin', 'staff', 'viewer'];
 const HISTORY_PAGE_SIZE = 15;
 let historyOrders = [];
 let historyPage = 0;
@@ -1179,6 +1186,8 @@ document.getElementById('admin-search-box').addEventListener('input', function(e
 });
 
 function renderAdminProducts(){
+  document.getElementById('add-product-btn').style.display = currentRole === 'viewer' ? 'none' : 'inline-block';
+
   let list = PRODUCTS;
   if (adminSearchTerm) list = list.filter(p => p.name.toLowerCase().includes(adminSearchTerm));
 
@@ -1194,8 +1203,8 @@ function renderAdminProducts(){
       <td>${escapeHtml(p.vin || '')}</td>
       <td>${p.out_of_stock ? '<span class="oos-tag">Out of Stock</span>' : ''}</td>
       <td>
-        <button onclick="openProductModal('${p.id}')">Edit</button>
-        <button class="danger" onclick="deleteProduct('${p.id}')">Delete</button>
+        ${currentRole === 'viewer' ? '' : `<button onclick="openProductModal('${p.id}')">Edit</button>
+        <button class="danger" onclick="deleteProduct('${p.id}')">Delete</button>`}
       </td>
     </tr>`;
   }).join('') + `</table>`;
@@ -1350,7 +1359,7 @@ async function loadAccounts(){
     return;
   }
 
-  const ROLE_SORT_ORDER = { owner: 0, admin: 1, staff: 2, manager: 3 };
+  const ROLE_SORT_ORDER = { owner: 0, admin: 1, staff: 2, viewer: 3, manager: 4 };
   data.sort((a, b) => {
     const r = ROLE_SORT_ORDER[a.role] - ROLE_SORT_ORDER[b.role];
     return r !== 0 ? r : a.name.localeCompare(b.name);
@@ -1368,7 +1377,8 @@ function renderAccounts(){
 
   document.getElementById('accounts-rows').innerHTML = `<table class="admin-table">
     <tr><th>Name</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th></th></tr>` + list.map(m => {
-    const canEdit = currentRole === 'owner' || m.id === currentUserId;
+    const canEdit = currentRole !== 'viewer' && (currentRole === 'owner' || m.id === currentUserId);
+    const canResetPassword = currentRole !== 'viewer';
     const canDelete = currentRole === 'owner' && !m.is_protected && m.id !== currentUserId;
     return `<tr>
       <td>${escapeHtml(m.name)}</td>
@@ -1378,7 +1388,7 @@ function renderAccounts(){
       <td>${escapeHtml(m.phone || '')}</td>
       <td>
         ${canEdit ? `<button onclick="openAccountModal('${m.id}')">Edit</button>` : ''}
-        <button onclick="resetPassword('${m.id}', '${escapeHtml(m.name).replace(/'/g,"\\'")}')">Reset Password</button>
+        ${canResetPassword ? `<button onclick="resetPassword('${m.id}', '${escapeHtml(m.name).replace(/'/g,"\\'")}')">Reset Password</button>` : ''}
         ${canDelete ? `<button class="danger" onclick="deleteAccount('${m.id}')">Delete</button>` : ''}
       </td>
     </tr>`;
@@ -1585,6 +1595,11 @@ async function loadProfileView(){
   document.getElementById('profile-email').value = data.email;
   document.getElementById('profile-store').value = data.store || '';
   document.getElementById('profile-phone').value = data.phone || '';
+
+  const isViewer = currentRole === 'viewer';
+  document.getElementById('profile-name').disabled = isViewer;
+  document.getElementById('profile-phone').disabled = isViewer;
+  document.getElementById('save-profile-btn').style.display = isViewer ? 'none' : 'inline-block';
 }
 
 async function saveProfile(){
@@ -1714,10 +1729,10 @@ function renderPendingRequests(list){
       <div class="req-detail">Category: ${escapeHtml(r.category || '')}</div>
       ${r.image_url ? `<div class="req-detail">Image: <a href="${escapeHtml(r.image_url)}" target="_blank" rel="noopener" style="color:var(--accent-light);">${escapeHtml(r.image_url)}</a></div>` : ''}
       ${r.notes ? `<div class="req-detail">${escapeHtml(r.notes)}</div>` : ''}
-      <div class="req-actions">
+      ${currentRole === 'viewer' ? '' : `<div class="req-actions">
         <button class="btn-add" onclick="approveRequest('${r.id}', '${escapeHtml(r.name).replace(/'/g,"\\'")}', '${escapeHtml(r.category || '').replace(/'/g,"\\'")}')">Approve</button>
         <button onclick="rejectRequest('${r.id}')" style="padding:9px 16px;border-radius:6px;border:1px solid #a02f2f;background:rgba(160,47,47,0.2);color:#ff9b9b;font-size:14px;cursor:pointer;">Reject</button>
-      </div>
+      </div>`}
     </div>`;
   }).join('');
 }
