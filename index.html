@@ -1378,7 +1378,7 @@ function renderAccounts(){
   document.getElementById('accounts-rows').innerHTML = `<table class="admin-table">
     <tr><th>Name</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th></th></tr>` + list.map(m => {
     const canEdit = currentRole !== 'viewer' && (currentRole === 'owner' || m.id === currentUserId);
-    const canResetPassword = currentRole !== 'viewer';
+    const canResetPassword = currentRole !== 'viewer' && (m.role !== 'owner' || m.id === currentUserId);
     const canDelete = currentRole === 'owner' && !m.is_protected && m.id !== currentUserId;
     return `<tr>
       <td>${escapeHtml(m.name)}</td>
