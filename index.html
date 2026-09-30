@@ -134,19 +134,23 @@
   .preview-tabs button:hover{color:#111;}
   .ticket{border:1px solid #ccc;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;}
   .ticket-head{padding:14px 18px;color:#fff;}
-  .ticket-head.pbo{background:#132a52;}
-  .ticket-head.gngfilter{background:#8c1c1c;}
+  .ticket-head.pbo{background:#1b3a6b;}
+  .ticket-head.gngfilter{background:#c8102e;}
   .ticket-head.full{background:#1a1a1a;}
   .ticket-head .ticket-brand{font-size:15px;font-weight:800;letter-spacing:0.5px;}
   .ticket-head .ticket-sub{font-size:12px;opacity:0.85;margin-top:2px;}
   .ticket-meta{padding:12px 18px;background:#f6f6f6;font-size:12.5px;color:#333;border-bottom:1px solid #ddd;}
   .ticket-meta div{margin-bottom:3px;}
   .ticket-meta b{color:#000;}
+  .ticket-infobox{display:flex;gap:28px;padding:10px 18px;border-bottom:1px solid #ddd;background:#fff;}
+  .ticket-infobox .info-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:2px;}
+  .ticket-infobox .info-value{font-size:13px;font-weight:600;color:#111;}
   .ticket table{width:100%;border-collapse:collapse;font-size:12.5px;}
   .ticket th{text-align:left;padding:7px 10px;background:#eee;color:#444;font-size:10.5px;text-transform:uppercase;border-bottom:1px solid #ccc;}
   .ticket td{padding:8px 10px;border-bottom:1px solid #e5e5e5;color:#222;}
-  .ticket-sign{display:flex;gap:24px;padding:16px 18px;font-size:12px;color:#555;}
-  .ticket-sign .sign-line{flex:1;border-top:1px solid #999;padding-top:4px;}
+  .ticket.pbo-ticket table th{background:#1b3a6b;color:#fff;}
+  .ticket.gng-ticket table th{background:#c8102e;color:#fff;}
+  .ticket-footer-sign{padding:14px 18px;border-top:1px solid #9ca3af;font-size:12px;color:#374151;}
   .ticket-empty{padding:20px 18px;font-size:13px;color:#888;text-align:center;}
 
   .admin-view{padding:20px 22px;}
@@ -1104,20 +1108,17 @@ function showPreviewTab(tab){
 function ticketTable(items){
   if (items.length === 0) return '<div class="ticket-empty">No items on this ticket for this order.</div>';
   const rows = items.map(oi => `<tr>
+    <td style="text-align:center;">${escapeHtml(oi.vin_snapshot || '')}</td>
     <td>${escapeHtml(oi.product_name_snapshot)}</td>
-    <td>${escapeHtml(oi.vin_snapshot || '')}</td>
-    <td>${oi.quantity}</td>
+    <td style="text-align:center;">${oi.quantity}</td>
     <td></td>
     <td></td>
   </tr>`).join('');
   return `<table>
-    <tr><th>Item</th><th>VIN</th><th>Qty Ordered</th><th>Qty Picked</th><th>Notes</th></tr>
+    <tr><th style="text-align:center;">VIN</th><th>Description</th><th style="text-align:center;">Ord Qty</th><th style="text-align:center;">Picked Qty</th><th>Notes</th></tr>
     ${rows}
   </table>
-  <div class="ticket-sign">
-    <div class="sign-line">Signature</div>
-    <div class="sign-line">Date</div>
-  </div>`;
+  <div class="ticket-footer-sign">Signed: ___________________________________&nbsp;&nbsp; Date: ______________</div>`;
 }
 
 function renderPreviewTab(tab){
@@ -1141,8 +1142,8 @@ function renderPreviewTab(tab){
     </tr>`).join('');
     container.innerHTML = `<div class="ticket">
       <div class="ticket-head full">
-        <div class="ticket-brand">PBO2GO &mdash; Full Order Copy</div>
-        <div class="ticket-sub">Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
+        <div class="ticket-brand">PERRY BROTHERS OIL COMPANY</div>
+        <div class="ticket-sub">Full Order Copy &mdash; Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
       </div>
       <div class="ticket-meta">
         <div><b>To:</b> AbbyButler@perrybrothersoil.com${!isCorporate && m.dm_email ? ', ' + escapeHtml(m.dm_email) : ''}</div>
@@ -1157,27 +1158,29 @@ function renderPreviewTab(tab){
     </div>`;
   } else if (tab === 'gng') {
     const items = o.order_items.filter(oi => oi.routing_group_snapshot === 'GNG' || oi.routing_group_snapshot === 'FILTER');
-    container.innerHTML = `<div class="ticket">
+    container.innerHTML = `<div class="ticket gng-ticket">
       <div class="ticket-head gngfilter">
-        <div class="ticket-brand">GNG + FILTER Pick Ticket</div>
-        <div class="ticket-sub">Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
+        <div class="ticket-brand">PERRY BROTHERS OIL COMPANY</div>
+        <div class="ticket-sub">GNG Pick List</div>
       </div>
-      <div class="ticket-meta">
-        <div><b>To:</b> ShanaLynn@perrybrothersoil.com</div>
-        <div><b>Placed:</b> ${when}</div>
+      <div class="ticket-infobox">
+        <div><div class="info-label">Store / Customer</div><div class="info-value">${escapeHtml(storeName)}</div></div>
+        <div><div class="info-label">Order Placed</div><div class="info-value">${when}</div></div>
+        <div><div class="info-label">PBO2GO Order #</div><div class="info-value">${o.order_number}</div></div>
       </div>
       ${ticketTable(items)}
     </div>`;
   } else {
     const items = o.order_items.filter(oi => oi.routing_group_snapshot === 'PBO');
-    container.innerHTML = `<div class="ticket">
+    container.innerHTML = `<div class="ticket pbo-ticket">
       <div class="ticket-head pbo">
-        <div class="ticket-brand">PBO Pick Ticket</div>
-        <div class="ticket-sub">Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
+        <div class="ticket-brand">PERRY BROTHERS OIL COMPANY</div>
+        <div class="ticket-sub">PBO Warehouse Pick List</div>
       </div>
-      <div class="ticket-meta">
-        <div><b>To:</b> johncook@perrybrothersoil.com</div>
-        <div><b>Placed:</b> ${when}</div>
+      <div class="ticket-infobox">
+        <div><div class="info-label">Store / Customer</div><div class="info-value">${escapeHtml(storeName)}</div></div>
+        <div><div class="info-label">Order Placed</div><div class="info-value">${when}</div></div>
+        <div><div class="info-label">PBO2GO Order #</div><div class="info-value">${o.order_number}</div></div>
       </div>
       ${ticketTable(items)}
     </div>`;
