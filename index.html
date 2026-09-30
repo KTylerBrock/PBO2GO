@@ -707,7 +707,11 @@ function resolveImageSrc(image_url){
 
 function renderProductGrid(){
   let list = PRODUCTS;
-  if (activeCategory !== 'ALL') list = list.filter(p => p.category === activeCategory);
+  if (activeCategory !== 'ALL') {
+    list = list.filter(p => p.category === activeCategory);
+  } else {
+    list = [...list].sort((a, b) => a.category.localeCompare(b.category));
+  }
   if (searchTerm) list = list.filter(p => p.name.toLowerCase().includes(searchTerm));
 
   if (list.length === 0) {
