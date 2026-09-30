@@ -202,10 +202,12 @@
 
   /* ===== Phone-width layout — only kicks in below 760px, desktop/tablet are untouched ===== */
   @media (max-width: 760px){
-    header.topbar{padding:0 12px;}
-    header.topbar .topbar-title{font-size:14px;}
-    header.topbar .userbox{gap:8px;}
+    header.topbar{padding:0 10px;}
+    header.topbar .topbar-title{font-size:13px;}
+    header.topbar .userbox{gap:6px;}
     header.topbar .userbox #user-name-label{display:none;}
+    header.topbar .userbox .role-badge{font-size:9px;padding:2px 5px;letter-spacing:0;}
+    header.topbar .userbox button{padding:6px 9px;font-size:12px;}
 
     .order-layout{display:block;min-height:auto;padding-bottom:76px;}
     .cat-sidebar{position:static;max-height:none;overflow-y:visible;overflow-x:auto;white-space:nowrap;border-right:none;border-bottom:1px solid rgba(255,255,255,0.1);padding:10px 12px;-webkit-overflow-scrolling:touch;}
