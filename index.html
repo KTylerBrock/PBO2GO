@@ -153,6 +153,20 @@
   .ticket-footer-sign{padding:14px 18px;border-top:1px solid #9ca3af;font-size:12px;color:#374151;}
   .ticket-empty{padding:20px 18px;font-size:13px;color:#888;text-align:center;}
 
+  .order-confirm{border:1px solid #ccc;border-radius:8px;overflow:hidden;font-family:Arial,sans-serif;background:#fff;padding:18px;color:#111;}
+  .order-confirm .oc-greeting{font-size:15px;font-weight:700;margin:0 0 16px;color:#111;}
+  .order-confirm .oc-section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#444;border-bottom:1px solid #ddd;padding-bottom:6px;margin-bottom:10px;}
+  .order-confirm .oc-fields{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:18px;}
+  .order-confirm .oc-fields td{padding:5px 0;vertical-align:top;}
+  .order-confirm .oc-fields td:first-child{color:#888;width:140px;}
+  .order-confirm .oc-fields td:last-child{color:#111;}
+  .order-confirm .oc-items{width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:16px;}
+  .order-confirm .oc-items th{text-align:left;padding:7px 8px;background:#eee;color:#444;font-size:10.5px;text-transform:uppercase;border-bottom:1px solid #ccc;}
+  .order-confirm .oc-items td{padding:7px 8px;border-bottom:1px solid #e5e5e5;color:#222;}
+  .order-confirm .oc-note{font-size:11.5px;color:#555;border-top:1px solid #ddd;padding-top:12px;margin:0 0 16px;}
+  .order-confirm .oc-footer{border-top:1px solid #ddd;padding-top:12px;font-size:11.5px;color:#555;display:flex;gap:28px;}
+  .order-confirm .oc-footer b{color:#888;font-size:10px;text-transform:uppercase;font-weight:700;}
+
   .admin-view{padding:20px 22px;}
   .admin-toolbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;flex-wrap:wrap;}
   .admin-toolbar input{padding:9px 12px;border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:14px;background:rgba(255,255,255,0.1);color:#fff;min-width:260px;}
@@ -1019,7 +1033,7 @@ async function reloadHistoryForFilter(){
 async function fetchHistoryPage(){
   let query = supabaseClient
     .from('orders')
-    .select('id, order_number, created_at, managers!inner(name, store, site_number, dm_name, dm_email), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+    .select('id, order_number, created_at, managers!inner(name, store, site_number, dm_name, dm_email, site_phone, site_address), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
     .order('created_at', { ascending: false })
     .range(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE - 1);
 
@@ -1131,30 +1145,36 @@ function renderPreviewTab(tab){
 
   if (tab === 'full') {
     const isCorporate = m.store === 'Corporate';
-    const dmLine = isCorporate
-      ? 'No District Manager &mdash; Corporate account order.'
-      : (m.dm_name ? `${escapeHtml(m.dm_name)} (${escapeHtml(m.dm_email)})` : 'No DM on file for this store.');
+    const siteName = isCorporate ? 'Corporate' : storeName;
+    const sitePhone = m.site_phone || '(phone not yet on file)';
+    const siteAddress = isCorporate ? 'Corporate account — no site address on file' : (m.site_address || '(address not yet on file)');
+    const pbo2goId = m.site_number ? `${m.site_number}-${o.order_number}` : `Corporate-${o.order_number}`;
     const rows = o.order_items.map(oi => `<tr>
       <td>${escapeHtml(oi.product_name_snapshot)}</td>
       <td>${escapeHtml(oi.vin_snapshot || '')}</td>
       <td>${escapeHtml(oi.routing_group_snapshot || '')}</td>
       <td>${oi.quantity}</td>
     </tr>`).join('');
-    container.innerHTML = `<div class="ticket">
-      <div class="ticket-head full">
-        <div class="ticket-brand">PERRY BROTHERS OIL COMPANY</div>
-        <div class="ticket-sub">Full Order Copy &mdash; Order #${o.order_number} &mdash; ${escapeHtml(storeName)}</div>
-      </div>
-      <div class="ticket-meta">
-        <div><b>To:</b> AbbyButler@perrybrothersoil.com${!isCorporate && m.dm_email ? ', ' + escapeHtml(m.dm_email) : ''}</div>
-        <div><b>District Manager:</b> ${dmLine}</div>
-        <div><b>Placed by:</b> ${escapeHtml(m.name || '')}</div>
-        <div><b>Placed:</b> ${when}</div>
-      </div>
-      <table>
+    container.innerHTML = `<div class="order-confirm">
+      <p class="oc-greeting">Thanks for your order!</p>
+      <div class="oc-section-label">Delivery Details</div>
+      <table class="oc-fields">
+        <tr><td>Order Placed</td><td>${when}</td></tr>
+        <tr><td>From</td><td>${escapeHtml(siteName)}<br>${escapeHtml(sitePhone)}</td></tr>
+        <tr><td>For</td><td>Abby Mims<br>abbybutler@perrybrothersoil.com<br>2295916656<br>523 US-280 E, Americus GA 31709</td></tr>
+        <tr><td>Payment</td><td>To be paid on delivery</td></tr>
+      </table>
+      <div class="oc-section-label">Your Order</div>
+      <table class="oc-items">
         <tr><th>Item</th><th>VIN</th><th>Routing</th><th>Qty</th></tr>
         ${rows}
       </table>
+      <p class="oc-note">Please do not respond to this email. To make any changes to this order, please call ${escapeHtml(siteName)} at ${escapeHtml(sitePhone)}.</p>
+      <div class="oc-footer">
+        <div><b>Address</b><br>${escapeHtml(siteAddress)}</div>
+        <div><b>Date</b><br>${when}</div>
+        <div><b>PBO2GO ID</b><br>${escapeHtml(pbo2goId)}</div>
+      </div>
     </div>`;
   } else if (tab === 'gng') {
     const items = o.order_items.filter(oi => oi.routing_group_snapshot === 'GNG' || oi.routing_group_snapshot === 'FILTER');
