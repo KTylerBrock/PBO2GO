@@ -120,6 +120,10 @@
   #filter-section label{display:flex;align-items:center;gap:12px;cursor:pointer;font-weight:700;font-size:17px;}
   #filter-section input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--accent);cursor:pointer;}
   #filter-section .filter-list{margin:8px 0 0 34px;color:rgba(255,255,255,0.75);font-weight:400;font-size:13.5px;}
+  #site-picker-section{background:rgba(204,255,0,0.1);border:1px solid var(--secondary);border-radius:8px;padding:14px 20px;margin-bottom:18px;font-size:14.5px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  #site-picker-section label{font-weight:700;}
+  #site-picker-section select{padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:#fff;font-size:14px;cursor:pointer;}
+  #site-picker-section select option{background:#151b26;color:#fff;}
   .success-box{text-align:center;}
   .success-icon{font-size:42px;text-align:center;margin-bottom:8px;}
   .modal-sub{font-size:13px;color:rgba(255,255,255,0.7);line-height:1.5;margin-bottom:4px;}
@@ -307,6 +311,7 @@
   <div class="order-layout">
     <div class="cat-sidebar" id="cat-sidebar"></div>
     <div class="catalog-main">
+      <div id="site-picker-section" style="display:none;"></div>
       <h2 id="catalog-title">All Items</h2>
       <div class="subtext">Set quantities and add items to your order. Grayed-out items are marked out of stock.</div>
       <div id="filter-section" style="display:none;"></div>
@@ -515,6 +520,7 @@
       <select id="new-account-role" onchange="toggleNewAccountStoreFields()">
         <option value="manager" selected>Manager (store account)</option>
         <option value="staff">Staff</option>
+        <option value="dm">District Manager</option>
         <option value="admin">Admin</option>
         <option value="owner">Owner</option>
         <option value="viewer">Viewer (read-only demo)</option>
@@ -597,7 +603,10 @@ let historyStoreFilterValue = 'ALL';
 let myFilters = [];
 let filtersInCart = false;
 const ADMIN_ROLES = ['owner', 'admin', 'viewer'];
-const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager', viewer: 'Viewer' };
+const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager', viewer: 'Viewer', dm: 'District Manager' };
+const PLACE_FOR_SITE_ROLES = ['dm', 'admin', 'owner'];
+let selectedSiteManagerId = null;
+let sitePickerOptions = null;
 function roleLabel(role){
   return ROLE_LABELS[role] || role;
 }
@@ -644,14 +653,43 @@ document.getElementById('login-form').addEventListener('submit', async function(
   switchView('order');
 
   await loadProducts();
+  await loadSitePickerSection();
   await loadMyFilters();
 });
 
+async function loadSitePickerSection(){
+  const section = document.getElementById('site-picker-section');
+  if (!PLACE_FOR_SITE_ROLES.includes(currentRole)) {
+    section.style.display = 'none';
+    return;
+  }
+  if (!sitePickerOptions) {
+    const { data } = await supabaseClient.from('managers').select('id, store, site_number').eq('role', 'manager').order('site_number');
+    sitePickerOptions = data || [];
+  }
+  section.style.display = 'block';
+  section.innerHTML = `<label>Placing order for</label>
+    <select id="site-picker-select" onchange="onSitePickerChange(this.value)">
+      <option value="">Myself (Corporate)</option>
+      ${sitePickerOptions.map(s => `<option value="${s.id}">${escapeHtml(siteLabel(s))}</option>`).join('')}
+    </select>`;
+}
+
+async function onSitePickerChange(managerId){
+  selectedSiteManagerId = managerId || null;
+  orderCart = {};
+  cart = {};
+  filtersInCart = false;
+  renderCart();
+  await loadMyFilters();
+}
+
 async function loadMyFilters(){
+  const targetId = selectedSiteManagerId || currentUserId;
   const { data, error } = await supabaseClient
     .from('store_filters')
     .select('size, monthly_quantity')
-    .eq('manager_id', currentUserId)
+    .eq('manager_id', targetId)
     .order('size');
 
   const section = document.getElementById('filter-section');
@@ -898,9 +936,12 @@ async function confirmSubmitOrder(){
   btn.disabled = true;
   btn.textContent = 'Submitting...';
 
+  const orderInsert = { manager_id: selectedSiteManagerId || currentUserId };
+  if (selectedSiteManagerId) orderInsert.placed_by_id = currentUserId;
+
   const { data: order, error: orderError } = await supabaseClient
     .from('orders')
-    .insert({ manager_id: currentUserId })
+    .insert(orderInsert)
     .select('id, order_number')
     .single();
 
@@ -949,7 +990,14 @@ async function confirmSubmitOrder(){
   orderCart = {};
   removeFiltersFromCart();
   closeReviewModal();
-  document.getElementById('success-message').textContent = 'Order #' + order.order_number + ' has been submitted.';
+  const forSite = selectedSiteManagerId ? sitePickerOptions.find(s => s.id === selectedSiteManagerId) : null;
+  document.getElementById('success-message').textContent = 'Order #' + order.order_number + ' has been submitted' + (forSite ? ' for ' + siteLabel(forSite) : '') + '.';
+  if (selectedSiteManagerId) {
+    selectedSiteManagerId = null;
+    const picker = document.getElementById('site-picker-select');
+    if (picker) picker.value = '';
+    await loadMyFilters();
+  }
   document.getElementById('success-modal').classList.add('active');
 }
 
@@ -981,7 +1029,7 @@ function switchView(view){
   if (view === 'profile') loadProfileView();
 }
 
-const TOP4_ROLES = ['owner', 'admin', 'staff', 'viewer'];
+const TOP4_ROLES = ['owner', 'admin', 'staff', 'viewer', 'dm'];
 const HISTORY_PAGE_SIZE = 15;
 let historyOrders = [];
 let historyPage = 0;
@@ -1033,7 +1081,7 @@ async function reloadHistoryForFilter(){
 async function fetchHistoryPage(){
   let query = supabaseClient
     .from('orders')
-    .select('id, order_number, created_at, managers!inner(name, store, site_number, dm_name, dm_email, site_phone, site_address), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+    .select('id, order_number, created_at, managers!orders_manager_id_fkey!inner(name, store, site_number, dm_name, dm_email, site_phone, site_address), placedBy:managers!orders_placed_by_id_fkey(name), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
     .order('created_at', { ascending: false })
     .range(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE - 1);
 
@@ -1079,6 +1127,9 @@ function renderHistoryList(){
         if (o.managers.name !== o.managers.store) storeLabel += ' (' + escapeHtml(o.managers.store) + ')';
       }
     }
+    const placedBySuffix = (o.placedBy && o.placedBy.name)
+      ? ` <span style="color:rgba(255,255,255,0.6);font-weight:400;font-size:12px;">(placed by ${escapeHtml(o.placedBy.name)})</span>`
+      : '';
     const rows = o.order_items.map(oi => `<tr>
       <td>${escapeHtml(oi.product_name_snapshot)}</td>
       <td>${escapeHtml(oi.vin_snapshot || '')}</td>
@@ -1087,7 +1138,7 @@ function renderHistoryList(){
     </tr>`).join('');
     return `<div class="order-card">
       <div class="order-head">
-        <span class="order-num">Order #${o.order_number}${storeLabel}</span>
+        <span class="order-num">Order #${o.order_number}${storeLabel}${placedBySuffix}</span>
         <span class="order-meta">${when}${historyIsTop4 ? ` <button class="btn-preview" onclick="openEmailPreview('${o.id}')">Preview Emails</button>` : ''}</span>
       </div>
       <table>
@@ -1388,7 +1439,7 @@ async function loadAccounts(){
     return;
   }
 
-  const ROLE_SORT_ORDER = { owner: 0, admin: 1, staff: 2, viewer: 3, manager: 4 };
+  const ROLE_SORT_ORDER = { owner: 0, admin: 1, staff: 2, dm: 3, viewer: 4, manager: 5 };
   data.sort((a, b) => {
     const r = ROLE_SORT_ORDER[a.role] - ROLE_SORT_ORDER[b.role];
     return r !== 0 ? r : a.name.localeCompare(b.name);
@@ -1822,6 +1873,10 @@ function logout(){
   historyHasMore = true;
   historyIsTop4 = false;
   historyStoreOptions = null;
+  selectedSiteManagerId = null;
+  sitePickerOptions = null;
+  document.getElementById('site-picker-section').style.display = 'none';
+  document.getElementById('site-picker-section').innerHTML = '';
   document.getElementById('history-load-more-btn').style.display = 'none';
   cart = {};
   orderCart = {};
