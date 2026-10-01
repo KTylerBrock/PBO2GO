@@ -613,33 +613,18 @@ function roleLabel(role){
 let editingProductId = null;
 let productImageFile = null;
 
-document.getElementById('login-form').addEventListener('submit', async function(e){
-  e.preventDefault();
-  const email = document.getElementById('login-email').value;
-  const password = document.getElementById('login-password').value;
-  const errBox = document.getElementById('login-err');
-  errBox.style.display = 'none';
-
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    errBox.textContent = error.message;
-    errBox.style.display = 'block';
-    return;
-  }
-
+async function enterAppAsUser(userId){
   const { data: profile, error: profileError } = await supabaseClient
     .from('managers')
     .select('name, role, store')
-    .eq('id', data.user.id)
+    .eq('id', userId)
     .single();
 
   if (profileError) {
-    errBox.textContent = 'Logged in, but could not load profile: ' + profileError.message;
-    errBox.style.display = 'block';
-    return;
+    return 'Logged in, but could not load profile: ' + profileError.message;
   }
 
-  currentUserId = data.user.id;
+  currentUserId = userId;
   currentRole = profile.role;
   currentStore = profile.store;
   document.getElementById('user-name-label').textContent = profile.name;
@@ -655,7 +640,35 @@ document.getElementById('login-form').addEventListener('submit', async function(
   await loadProducts();
   await loadSitePickerSection();
   await loadMyFilters();
+  return null;
+}
+
+document.getElementById('login-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errBox = document.getElementById('login-err');
+  errBox.style.display = 'none';
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    errBox.textContent = error.message;
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const enterError = await enterAppAsUser(data.user.id);
+  if (enterError) {
+    errBox.textContent = enterError;
+    errBox.style.display = 'block';
+  }
 });
+
+(async function tryRestoreSession(){
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) return;
+  await enterAppAsUser(session.user.id);
+})();
 
 async function loadSitePickerSection(){
   const section = document.getElementById('site-picker-section');
