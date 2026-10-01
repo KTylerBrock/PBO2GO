@@ -605,6 +605,9 @@ let filtersInCart = false;
 const ADMIN_ROLES = ['owner', 'admin', 'viewer'];
 const ROLE_LABELS = { owner: 'Lead Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager', viewer: 'Viewer', dm: 'District Manager' };
 const PLACE_FOR_SITE_ROLES = ['dm', 'admin', 'owner'];
+// TEMP (2026-10-01): route every order email to Kevin only while testing at Fatboys, instead of the real
+// Abby/DM/Shana/John recipients. Set to null once Kevin confirms the email flow and is ready for full rollout.
+const EMAIL_TEST_OVERRIDE = 'kevinbrock@perrybrothersoil.com';
 let selectedSiteManagerId = null;
 let sitePickerOptions = null;
 function roleLabel(role){
@@ -998,6 +1001,14 @@ async function confirmSubmitOrder(){
   if (itemsError) {
     alert('Order was created but items failed to save: ' + itemsError.message);
     return;
+  }
+
+  try {
+    await supabaseClient.functions.invoke('send-order-emails', {
+      body: { order_id: order.id, override_recipient: EMAIL_TEST_OVERRIDE || undefined }
+    });
+  } catch (emailErr) {
+    console.error('send-order-emails failed:', emailErr);
   }
 
   orderCart = {};
