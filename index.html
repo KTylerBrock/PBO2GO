@@ -575,11 +575,14 @@
 
 <div class="modal-overlay" id="email-preview-modal">
   <div class="modal-box">
-    <h3>Email Preview <span style="font-weight:400;font-size:13px;color:#777;">&mdash; this is a preview only, nothing is actually sent</span></h3>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+      <h3 style="margin:0 0 16px;">Email Preview <span style="font-weight:400;font-size:13px;color:#777;">&mdash; this is a preview only, nothing is actually sent</span></h3>
+      <button onclick="closeEmailPreview()" aria-label="Close" style="flex:none;background:none;border:none;color:#777;font-size:22px;line-height:1;cursor:pointer;padding:0 0 0 8px;">&times;</button>
+    </div>
     <div class="preview-tabs">
       <button id="preview-tab-full" onclick="showPreviewTab('full')">Full Order</button>
-      <button id="preview-tab-gng" onclick="showPreviewTab('gng')">GNG + FILTER (Shana)</button>
-      <button id="preview-tab-pbo" onclick="showPreviewTab('pbo')">PBO (John)</button>
+      <button id="preview-tab-gng" onclick="showPreviewTab('gng')">GNG + FILTER</button>
+      <button id="preview-tab-pbo" onclick="showPreviewTab('pbo')">PBO</button>
     </div>
     <div id="preview-tab-content"></div>
     <div class="modal-actions"><button class="btn-cancel" onclick="closeEmailPreview()" style="flex:none;padding:10px 24px;">Close</button></div>
