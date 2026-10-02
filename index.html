@@ -194,6 +194,11 @@
   .pl-secondary{padding:9px 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.1);color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
   .pl-secondary:hover{background:rgba(255,255,255,0.2);}
   .pl-selectall{margin-bottom:10px;font-size:14px;}
+  .pl-auto{margin:0 0 12px;font-size:13.5px;color:rgba(255,255,255,0.85);}
+  .pl-auto label{display:flex;align-items:center;gap:8px;cursor:pointer;}
+  .pl-auto input{width:17px;height:17px;}
+  #pl-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;border-radius:8px;background:rgba(26,122,74,0.25);border:1px solid #1a7a4a;font-size:13.5px;}
+  #pl-banner button{padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.12);color:#fff;font-size:13px;font-weight:700;cursor:pointer;}
   .pl-row{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);}
   .pl-row input[type=checkbox]{width:18px;height:18px;flex:none;}
   .pl-row .pl-main{flex:1;min-width:0;}
@@ -466,6 +471,8 @@
       <button class="btn-add" id="pl-print-combined" onclick="printSelectedPickLists('combined')">Print combined summary</button>
       <button class="pl-secondary" id="pl-mark-btn" onclick="markSelectedProcessed()">Mark selected as processed</button>
     </div>
+    <div class="pl-auto"><label><input type="checkbox" id="pl-auto" checked onchange="savePickListAuto()"> Automatically mark orders as processed after printing</label></div>
+    <div id="pl-banner" style="display:none;"></div>
     <div class="pl-selectall"><label><input type="checkbox" id="pl-select-all" onchange="togglePickListSelectAll(this.checked)"> Select all</label> <span id="pl-count" style="margin-left:12px;color:rgba(255,255,255,0.65);font-size:13px;"></span></div>
     <div id="pl-list"></div>
   </div>
@@ -1457,6 +1464,8 @@ async function loadPickLists(){
   try {
     const saved = localStorage.getItem('pl-group');
     if (saved && PL_GROUPS[saved]) document.getElementById('pl-group').value = saved;
+    const auto = localStorage.getItem('pl-auto');
+    if (auto !== null) document.getElementById('pl-auto').checked = auto === '1';
   } catch (e) {}
   document.getElementById('pl-list').innerHTML = '<div style="color:#00ccff;">Loading...</div>';
   const { data, error } = await supabaseClient
@@ -1473,7 +1482,28 @@ async function loadPickLists(){
   renderPickLists();
 }
 
+function savePickListAuto(){
+  try { localStorage.setItem('pl-auto', document.getElementById('pl-auto').checked ? '1' : '0'); } catch (e) {}
+}
+
+async function plSetProcessed(ids, g, processed){
+  return supabaseClient.rpc('set_orders_processed', { p_order_ids: ids, p_group: g, p_processed: processed });
+}
+
+function showPickListBanner(ids, g){
+  const b = document.getElementById('pl-banner');
+  b.innerHTML = '<span>' + ids.length + ' order' + (ids.length === 1 ? '' : 's') + ' marked as processed.</span><button type="button" id="pl-undo-btn">Undo</button>';
+  b.style.display = 'flex';
+  document.getElementById('pl-undo-btn').onclick = async function(){
+    const { error } = await plSetProcessed(ids, g, false);
+    if (error) { alert('Could not undo: ' + error.message); return; }
+    b.style.display = 'none';
+    await loadPickLists();
+  };
+}
+
 function onPickListFilterChange(){
+  document.getElementById('pl-banner').style.display = 'none';
   try { localStorage.setItem('pl-group', plGroupKey()); } catch (e) {}
   plSelected = new Set();
   renderPickLists();
@@ -1546,7 +1576,7 @@ function plSelectedOrders(){
   return plVisibleOrders().filter(o => plSelected.has(o.id));
 }
 
-function printSelectedPickLists(mode){
+async function printSelectedPickLists(mode){
   const orders = plSelectedOrders();
   if (orders.length === 0) { alert('Select at least one order first.'); return; }
   const g = plGroupKey();
@@ -1630,11 +1660,24 @@ function printSelectedPickLists(mode){
     '<script>window.onload=function(){window.print();};<\/script></body></html>';
 
   const win = window.open('', '_blank');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-  } else {
+  if (!win) {
     alert('Please allow popups for this page, then try again.');
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+
+  if (document.getElementById('pl-auto').checked) {
+    const toMark = orders.filter(o => !o[cfg.col]).map(o => o.id);
+    if (toMark.length > 0) {
+      const { error } = await plSetProcessed(toMark, g, true);
+      if (error) {
+        alert('Printed, but could not mark the orders as processed: ' + error.message);
+        return;
+      }
+      await loadPickLists();
+      showPickListBanner(toMark, g);
+    }
   }
 }
 
