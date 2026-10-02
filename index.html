@@ -185,6 +185,21 @@
   .admin-table img{width:36px;height:36px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:4px;}
   .admin-table .oos-tag{background:var(--oos);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;}
   .admin-table .nla-tag{background:#a02f2f;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;}
+  .pl-controls{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;}
+  .pl-controls .field{min-width:150px;}
+  .pl-controls label{color:rgba(255,255,255,0.8);font-size:12.5px;font-weight:600;display:block;margin-bottom:4px;}
+  .pl-controls select,.pl-controls input{padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:#fff;font-size:14px;}
+  .pl-controls select option{background:#151b26;color:#fff;}
+  .pl-actions{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 14px;}
+  .pl-secondary{padding:9px 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.1);color:#fff;font-size:14px;font-weight:700;cursor:pointer;}
+  .pl-secondary:hover{background:rgba(255,255,255,0.2);}
+  .pl-selectall{margin-bottom:10px;font-size:14px;}
+  .pl-row{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);}
+  .pl-row input[type=checkbox]{width:18px;height:18px;flex:none;}
+  .pl-row .pl-main{flex:1;min-width:0;}
+  .pl-row .pl-title{font-weight:700;font-size:14.5px;}
+  .pl-row .pl-sub{font-size:12.5px;color:rgba(255,255,255,0.65);margin-top:2px;}
+  .pl-done-tag{background:#1a7a4a;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;}
   .order-comment-note{margin-top:10px;padding:8px 10px;background:rgba(0,204,255,0.1);border:1px solid rgba(0,204,255,0.35);border-radius:6px;font-size:13px;color:#fff;}
   .admin-table button{padding:5px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.1);color:#fff;font-size:12.5px;cursor:pointer;margin-right:6px;}
   .admin-table button:hover{background:rgba(255,255,255,0.2);}
@@ -319,6 +334,7 @@
       <button id="nav-order" class="active" onclick="switchView('order')">Place Order</button>
       <button id="nav-history" onclick="switchView('history')">Order History</button>
       <button id="nav-request" onclick="switchView('request')" style="display:none;">Request Product</button>
+      <button id="nav-picklists" onclick="switchView('picklists')" style="display:none;">Pick Lists</button>
       <button id="nav-requests" onclick="switchView('requests')" style="display:none;">Product Requests</button>
       <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
       <button id="nav-accounts" onclick="switchView('accounts')" style="display:none;">Accounts</button>
@@ -415,6 +431,43 @@
     </div>
     <h3 style="margin:28px 0 10px;font-size:16px;">Your Requests</h3>
     <div id="my-requests-list"></div>
+  </div>
+
+  <div class="admin-view" id="picklists-view" style="display:none;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Pick Lists</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Select orders, then print individual pick tickets or one combined sheet.</div>
+    <div class="pl-controls">
+      <div class="field">
+        <label>Pick list</label>
+        <select id="pl-group" onchange="onPickListFilterChange()">
+          <option value="PBO">PBO Warehouse</option>
+          <option value="GNG">GNG + Filters</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Show</label>
+        <select id="pl-status" onchange="onPickListFilterChange()">
+          <option value="open">Not yet processed</option>
+          <option value="done">Already processed</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>From</label>
+        <input type="date" id="pl-from" onchange="renderPickLists()">
+      </div>
+      <div class="field">
+        <label>To</label>
+        <input type="date" id="pl-to" onchange="renderPickLists()">
+      </div>
+    </div>
+    <div class="pl-actions">
+      <button class="btn-add" id="pl-print-individual" onclick="printSelectedPickLists('individual')">Print individual tickets</button>
+      <button class="btn-add" id="pl-print-combined" onclick="printSelectedPickLists('combined')">Print combined summary</button>
+      <button class="pl-secondary" id="pl-mark-btn" onclick="markSelectedProcessed()">Mark selected as processed</button>
+    </div>
+    <div class="pl-selectall"><label><input type="checkbox" id="pl-select-all" onchange="togglePickListSelectAll(this.checked)"> Select all</label> <span id="pl-count" style="margin-left:12px;color:rgba(255,255,255,0.65);font-size:13px;"></span></div>
+    <div id="pl-list"></div>
   </div>
 
   <div class="admin-view" id="requests-view" style="display:none;">
@@ -657,6 +710,7 @@ const PLACE_FOR_SITE_ROLES = ['dm', 'admin', 'owner'];
 const PRODUCT_EDIT_ROLES = ['owner', 'admin'];
 const PRODUCT_TOGGLE_ROLES = ['owner', 'admin', 'staff'];
 const CAN_SEE_ADMIN_ROLES = ['owner', 'admin', 'viewer', 'staff'];
+const PICKLIST_ROLES = ['owner', 'admin', 'staff'];
 let pendingSubstituteFor = null;
 // Set to an email address to redirect every order email to that one inbox (testing); null sends to the real recipients.
 const EMAIL_TEST_OVERRIDE = null;
@@ -687,6 +741,7 @@ async function enterAppAsUser(userId){
   document.getElementById('nav-admin').style.display = CAN_SEE_ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-request').style.display = profile.role === 'staff' ? 'inline-block' : 'none';
   document.getElementById('nav-requests').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
+  document.getElementById('nav-picklists').style.display = PICKLIST_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-accounts').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.querySelector('.view-login').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
@@ -1132,6 +1187,9 @@ function switchView(view){
   document.getElementById('nav-history').classList.toggle('active', view === 'history');
   document.getElementById('nav-request').classList.toggle('active', view === 'request');
   document.getElementById('nav-requests').classList.toggle('active', view === 'requests');
+  document.getElementById('nav-picklists').classList.toggle('active', view === 'picklists');
+  document.getElementById('picklists-view').style.display = view === 'picklists' ? 'block' : 'none';
+  if (view === 'picklists') loadPickLists();
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
   document.getElementById('nav-accounts').classList.toggle('active', view === 'accounts');
   document.getElementById('nav-profile').classList.toggle('active', view === 'profile');
@@ -1380,6 +1438,223 @@ function renderPreviewTab(tab){
       ${ticketTable(items)}
     </div>`;
   }
+}
+
+/* ===== Pick Lists: batch printing for fulfillment staff ===== */
+const PL_GROUPS = {
+  PBO: { label: 'PBO Warehouse Pick List', accent: '#1b3a6b', routings: ['PBO'], col: 'pbo_processed_at' },
+  GNG: { label: 'GNG Pick List', accent: '#c8102e', routings: ['GNG', 'FILTER'], col: 'gng_processed_at' }
+};
+let plOrders = [];
+let plSelected = new Set();
+
+function plGroupKey(){ return document.getElementById('pl-group').value; }
+function plItemsFor(order, g){ return order.order_items.filter(oi => PL_GROUPS[g].routings.includes(oi.routing_group_snapshot)); }
+function plOrderId(o){ const m = o.managers || {}; return m.site_number ? `${m.site_number}-${o.order_number}` : `Corporate-${o.order_number}`; }
+function plStoreLabel(o){ const m = o.managers || {}; return m.site_number ? siteLabel(m) : (m.name || m.store || ''); }
+
+async function loadPickLists(){
+  try {
+    const saved = localStorage.getItem('pl-group');
+    if (saved && PL_GROUPS[saved]) document.getElementById('pl-group').value = saved;
+  } catch (e) {}
+  document.getElementById('pl-list').innerHTML = '<div style="color:#00ccff;">Loading...</div>';
+  const { data, error } = await supabaseClient
+    .from('orders')
+    .select('id, order_number, created_at, comments, pbo_processed_at, gng_processed_at, managers!orders_manager_id_fkey!inner(name, store, site_number, site_address), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+    .order('created_at', { ascending: true })
+    .limit(1000);
+  if (error) {
+    document.getElementById('pl-list').innerHTML = '<div style="color:#ff8080;">Could not load orders: ' + escapeHtml(error.message) + '</div>';
+    return;
+  }
+  plOrders = data;
+  plSelected = new Set();
+  renderPickLists();
+}
+
+function onPickListFilterChange(){
+  try { localStorage.setItem('pl-group', plGroupKey()); } catch (e) {}
+  plSelected = new Set();
+  renderPickLists();
+}
+
+function plVisibleOrders(){
+  const g = plGroupKey();
+  const status = document.getElementById('pl-status').value;
+  const from = document.getElementById('pl-from').value;
+  const to = document.getElementById('pl-to').value;
+  const fromD = from ? new Date(from + 'T00:00:00') : null;
+  const toD = to ? new Date(to + 'T23:59:59') : null;
+  return plOrders.filter(o => {
+    if (plItemsFor(o, g).length === 0) return false;
+    const done = !!o[PL_GROUPS[g].col];
+    if (status === 'open' && done) return false;
+    if (status === 'done' && !done) return false;
+    const d = new Date(o.created_at);
+    if (fromD && d < fromD) return false;
+    if (toD && d > toD) return false;
+    return true;
+  });
+}
+
+function renderPickLists(){
+  const g = plGroupKey();
+  const status = document.getElementById('pl-status').value;
+  const list = plVisibleOrders();
+  const visibleIds = new Set(list.map(o => o.id));
+  plSelected = new Set([...plSelected].filter(id => visibleIds.has(id)));
+
+  document.getElementById('pl-mark-btn').textContent = status === 'done' ? 'Mark selected as NOT processed' : 'Mark selected as processed';
+
+  if (list.length === 0) {
+    document.getElementById('pl-list').innerHTML = '<div style="color:#00ccff;">No orders match.</div>';
+  } else {
+    document.getElementById('pl-list').innerHTML = list.map(o => {
+      const items = plItemsFor(o, g);
+      const done = !!o[PL_GROUPS[g].col];
+      return `<label class="pl-row">
+        <input type="checkbox" ${plSelected.has(o.id) ? 'checked' : ''} onchange="togglePickListRow('${o.id}', this.checked)">
+        <div class="pl-main">
+          <div class="pl-title">${escapeHtml(plStoreLabel(o))} &mdash; Order #${o.order_number}</div>
+          <div class="pl-sub">${escapeHtml(new Date(o.created_at).toLocaleString())} &middot; ${items.length} line item${items.length === 1 ? '' : 's'}${o.comments ? ' &middot; has comment' : ''}</div>
+        </div>
+        ${done ? '<span class="pl-done-tag">Processed</span>' : ''}
+      </label>`;
+    }).join('');
+  }
+  updatePickListCount(list.length);
+}
+
+function updatePickListCount(visibleCount){
+  document.getElementById('pl-count').textContent = plSelected.size + ' of ' + visibleCount + ' selected';
+  document.getElementById('pl-select-all').checked = visibleCount > 0 && plSelected.size === visibleCount;
+}
+
+function togglePickListRow(id, checked){
+  if (checked) plSelected.add(id); else plSelected.delete(id);
+  updatePickListCount(plVisibleOrders().length);
+}
+
+function togglePickListSelectAll(checked){
+  const list = plVisibleOrders();
+  plSelected = checked ? new Set(list.map(o => o.id)) : new Set();
+  renderPickLists();
+}
+
+function plSelectedOrders(){
+  return plVisibleOrders().filter(o => plSelected.has(o.id));
+}
+
+function printSelectedPickLists(mode){
+  const orders = plSelectedOrders();
+  if (orders.length === 0) { alert('Select at least one order first.'); return; }
+  const g = plGroupKey();
+  const cfg = PL_GROUPS[g];
+  const now = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const css = '@page{size:letter portrait;margin:0.6in 0.55in 0.7in 0.55in}' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:9pt;color:#111}' +
+    '.header{background:' + cfg.accent + ';color:#fff;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-end}' +
+    '.company{font-size:14pt;font-weight:700;letter-spacing:.3px}' +
+    '.list-title{font-size:10pt;margin-top:2px;opacity:.9}' +
+    '.header-right{font-size:7.5pt;opacity:.85;text-align:right}' +
+    '.info-box{border:1px solid #d1d5db;border-radius:3px;padding:8px 12px;margin-bottom:10px;display:flex;gap:32px}' +
+    '.info-label{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6b7280;margin-bottom:2px}' +
+    '.info-value{font-size:9pt;font-weight:600;color:#111}' +
+    '.info-sub{font-size:7.5pt;color:#6b7280;margin-top:1px}' +
+    'table{width:100%;border-collapse:collapse;margin-bottom:10px}' +
+    'thead tr{background:' + cfg.accent + ';color:#fff}' +
+    'thead th{padding:5px 6px;text-align:left;font-size:8pt;font-weight:700;letter-spacing:.3px}' +
+    'thead th.center{text-align:center}' +
+    'tbody tr:nth-child(even){background:#f9fafb}' +
+    'tbody td{padding:5px 6px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:8.5pt}' +
+    '.center{text-align:center}' +
+    '.note{border:1px solid #d1d5db;background:#f9fafb;padding:6px 10px;font-size:8.5pt;margin-bottom:10px}' +
+    '.ticket{page-break-after:always}.ticket:last-of-type{page-break-after:auto}' +
+    '.footer{position:fixed;bottom:0.35in;left:0.55in;right:0.55in;border-top:1px solid #9ca3af;padding-top:6px;display:flex;justify-content:space-between;font-size:8pt;color:#374151}' +
+    '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+
+  const header = (subtitle) => '<div class="header"><div><div class="company">PERRY BROTHERS OIL COMPANY</div><div class="list-title">' + escapeHtml(subtitle) + '</div></div><div class="header-right">Generated: ' + escapeHtml(now) + '</div></div>';
+
+  let body = '';
+  if (mode === 'individual') {
+    body = orders.map(o => {
+      const m = o.managers || {};
+      const rows = plItemsFor(o, g).map(oi =>
+        '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(oi.vin_snapshot || '—') + '</td><td>' + escapeHtml(oi.product_name_snapshot) + '</td><td class="center">' + oi.quantity + '</td><td></td><td></td></tr>'
+      ).join('');
+      return '<div class="ticket">' + header(cfg.label) +
+        '<div class="info-box">' +
+          '<div><div class="info-label">Store / Customer</div><div class="info-value">' + escapeHtml(plStoreLabel(o)) + '</div><div class="info-sub">' + escapeHtml(m.site_address || '') + '</div></div>' +
+          '<div><div class="info-label">Order Placed</div><div class="info-value">' + escapeHtml(new Date(o.created_at).toLocaleString()) + '</div></div>' +
+          '<div><div class="info-label">PBO2GO Order ID</div><div class="info-value">' + escapeHtml(plOrderId(o)) + '</div></div>' +
+        '</div>' +
+        (o.comments ? '<div class="note"><b>Order comment:</b> ' + escapeHtml(o.comments) + '</div>' : '') +
+        '<table><thead><tr><th class="center" style="width:12%">VIN</th><th style="width:42%">Description</th><th class="center" style="width:9%">Ord Qty</th><th class="center" style="width:13%">Picked Qty</th><th style="width:24%">Notes</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '</div>';
+    }).join('');
+  } else {
+    const agg = new Map();
+    orders.forEach(o => {
+      plItemsFor(o, g).forEach(oi => {
+        const key = (oi.vin_snapshot || '') + '|' + oi.product_name_snapshot;
+        if (!agg.has(key)) agg.set(key, { vin: oi.vin_snapshot || '—', desc: oi.product_name_snapshot, total: 0, stores: new Map() });
+        const a = agg.get(key);
+        a.total += oi.quantity;
+        const lbl = (o.managers && o.managers.site_number) ? String(o.managers.site_number) : plStoreLabel(o);
+        a.stores.set(lbl, (a.stores.get(lbl) || 0) + oi.quantity);
+      });
+    });
+    const lines = [...agg.values()].sort((a, b) => a.desc.localeCompare(b.desc));
+    const rows = lines.map(a =>
+      '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(a.vin) + '</td><td>' + escapeHtml(a.desc) + '</td><td class="center"><b>' + a.total + '</b></td><td>' + escapeHtml([...a.stores.entries()].map(([s, q]) => s + ': ' + q).join(', ')) + '</td><td></td></tr>'
+    ).join('');
+    const commented = orders.filter(o => o.comments);
+    const first = new Date(orders[0].created_at).toLocaleDateString();
+    const last = new Date(orders[orders.length - 1].created_at).toLocaleDateString();
+    body = '<div>' + header(cfg.label + ' — Combined Summary') +
+      '<div class="info-box">' +
+        '<div><div class="info-label">Orders Included</div><div class="info-value">' + orders.length + '</div></div>' +
+        '<div><div class="info-label">Order Dates</div><div class="info-value">' + escapeHtml(first === last ? first : first + ' – ' + last) + '</div></div>' +
+        '<div><div class="info-label">Unique Items</div><div class="info-value">' + lines.length + '</div></div>' +
+      '</div>' +
+      '<table><thead><tr><th class="center" style="width:11%">VIN</th><th style="width:36%">Description</th><th class="center" style="width:10%">Total Qty</th><th style="width:30%">By Store (site: qty)</th><th style="width:13%">Picked</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      (commented.length ? '<div class="note"><b>Order comments:</b><br>' + commented.map(o => escapeHtml(plOrderId(o)) + ' (' + escapeHtml(plStoreLabel(o)) + '): ' + escapeHtml(o.comments)).join('<br>') + '</div>' : '') +
+    '</div>';
+  }
+
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(cfg.label) + '</title><style>' + css + '</style></head><body>' + body +
+    '<div class="footer"><span>Signed: ___________________________________&nbsp;&nbsp; Date: ______________</span><span>' + escapeHtml(cfg.label) + '</span></div>' +
+    '<script>window.onload=function(){window.print();};<\/script></body></html>';
+
+  const win = window.open('', '_blank');
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  } else {
+    alert('Please allow popups for this page, then try again.');
+  }
+}
+
+async function markSelectedProcessed(){
+  const orders = plSelectedOrders();
+  if (orders.length === 0) { alert('Select at least one order first.'); return; }
+  const status = document.getElementById('pl-status').value;
+  const makeProcessed = status !== 'done';
+  const g = plGroupKey();
+  const verb = makeProcessed ? 'processed' : 'NOT processed';
+  if (!confirm('Mark ' + orders.length + ' order' + (orders.length === 1 ? '' : 's') + ' as ' + verb + '?')) return;
+
+  const { error } = await supabaseClient.rpc('set_orders_processed', {
+    p_order_ids: orders.map(o => o.id), p_group: g, p_processed: makeProcessed
+  });
+  if (error) {
+    alert('Could not update: ' + error.message);
+    return;
+  }
+  await loadPickLists();
 }
 
 let adminSearchTerm = '';
@@ -2124,6 +2399,9 @@ function logout(){
   document.getElementById('nav-admin').style.display = 'none';
   document.getElementById('nav-request').style.display = 'none';
   document.getElementById('nav-requests').style.display = 'none';
+  document.getElementById('nav-picklists').style.display = 'none';
+  plOrders = [];
+  document.getElementById('pl-list').innerHTML = '';
   document.getElementById('nav-accounts').style.display = 'none';
   document.getElementById('admin-product-rows').innerHTML = '';
   document.getElementById('admin-search-box').value = '';
