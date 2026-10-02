@@ -658,9 +658,8 @@ const PRODUCT_EDIT_ROLES = ['owner', 'admin'];
 const PRODUCT_TOGGLE_ROLES = ['owner', 'admin', 'staff'];
 const CAN_SEE_ADMIN_ROLES = ['owner', 'admin', 'viewer', 'staff'];
 let pendingSubstituteFor = null;
-// TEMP (2026-10-01): route every order email to Kevin only while testing at Fatboys, instead of the real
-// Abby/DM/Shana/John recipients. Set to null once Kevin confirms the email flow and is ready for full rollout.
-const EMAIL_TEST_OVERRIDE = 'kevinbrock@perrybrothersoil.com';
+// Set to an email address to redirect every order email to that one inbox (testing); null sends to the real recipients.
+const EMAIL_TEST_OVERRIDE = null;
 let selectedSiteManagerId = null;
 let sitePickerOptions = null;
 function roleLabel(role){
