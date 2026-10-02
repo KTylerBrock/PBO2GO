@@ -231,7 +231,8 @@
   /* ===== Phone-width layout — only kicks in below 760px, desktop/tablet are untouched ===== */
   @media (max-width: 760px){
     header.topbar{padding:0 10px;}
-    header.topbar .topbar-title{font-size:13px;}
+    header.topbar .topbar-title{display:none;}
+    header.topbar nav{min-width:0;flex:1 1 auto;justify-content:flex-start;}
     header.topbar .userbox{gap:6px;}
     header.topbar .userbox #user-name-label{display:none;}
     header.topbar .userbox .role-badge{font-size:9px;padding:2px 5px;letter-spacing:0;}
@@ -291,6 +292,22 @@
         </div>
         <button type="submit" class="btn">Log In</button>
       </form>
+      <div id="forgot-password-link-row" style="text-align:center;margin-top:14px;">
+        <a href="#" onclick="showForgotPassword(); return false;" style="color:var(--accent-dark);font-size:13px;">Forgot password?</a>
+      </div>
+      <div id="forgot-password-panel" style="display:none;">
+        <div style="font-size:13.5px;color:#555;margin-bottom:14px;">Enter your work email and we'll send a new password to it.</div>
+        <div class="field">
+          <label>Work Email</label>
+          <input type="email" id="forgot-email">
+        </div>
+        <div class="err" id="forgot-err" style="display:none;"></div>
+        <div id="forgot-success" style="display:none;color:#1a7a4a;font-size:13.5px;margin-bottom:12px;"></div>
+        <button type="button" class="btn" id="forgot-submit-btn" onclick="submitForgotPassword()">Send New Password</button>
+        <div style="text-align:center;margin-top:14px;">
+          <a href="#" onclick="hideForgotPassword(); return false;" style="color:var(--accent-dark);font-size:13px;">Back to login</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -682,6 +699,43 @@ async function enterAppAsUser(userId){
   return null;
 }
 
+function showForgotPassword(){
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('forgot-password-link-row').style.display = 'none';
+  document.getElementById('login-err').style.display = 'none';
+  document.getElementById('forgot-email').value = '';
+  document.getElementById('forgot-err').style.display = 'none';
+  document.getElementById('forgot-success').style.display = 'none';
+  document.getElementById('forgot-password-panel').style.display = 'block';
+}
+
+function hideForgotPassword(){
+  document.getElementById('forgot-password-panel').style.display = 'none';
+  document.getElementById('login-form').style.display = '';
+  document.getElementById('forgot-password-link-row').style.display = '';
+}
+
+async function submitForgotPassword(){
+  const email = document.getElementById('forgot-email').value.trim();
+  const errBox = document.getElementById('forgot-err');
+  const successBox = document.getElementById('forgot-success');
+  errBox.style.display = 'none';
+  successBox.style.display = 'none';
+  if (!email) {
+    errBox.textContent = 'Enter your work email.';
+    errBox.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('forgot-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const { data } = await supabaseClient.functions.invoke('request-password-reset', { body: { email } });
+  btn.disabled = false;
+  btn.textContent = 'Send New Password';
+  successBox.textContent = (data && data.message) || "If that email has a PBO2GO account, a new password has been sent to it.";
+  successBox.style.display = 'block';
+}
+
 document.getElementById('login-form').addEventListener('submit', async function(e){
   e.preventDefault();
   const email = document.getElementById('login-email').value;
@@ -691,7 +745,9 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
   const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if (error) {
-    errBox.textContent = error.message;
+    errBox.textContent = error.message.toLowerCase().includes('banned')
+      ? 'This account has been deactivated. Contact Kevin or Abby.'
+      : error.message;
     errBox.style.display = 'block';
     return;
   }
@@ -1541,7 +1597,7 @@ async function loadAccounts(){
 
   const { data, error } = await supabaseClient
     .from('managers')
-    .select('id, name, email, phone, store, role, site_number, is_protected')
+    .select('id, name, email, phone, store, role, site_number, is_protected, is_active')
     .order('name');
 
   if (error) {
@@ -1566,23 +1622,48 @@ function renderAccounts(){
   }
 
   document.getElementById('accounts-rows').innerHTML = `<table class="admin-table">
-    <tr><th>Name</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th></th></tr>` + list.map(m => {
+    <tr><th>Name</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th>Status</th><th></th></tr>` + list.map(m => {
     const canEdit = currentRole !== 'viewer' && (currentRole === 'owner' || m.id === currentUserId);
     const canResetPassword = currentRole !== 'viewer' && (m.role !== 'owner' || m.id === currentUserId);
     const canDelete = currentRole === 'owner' && !m.is_protected && m.id !== currentUserId;
+    const canDeactivate = ['owner', 'admin'].includes(currentRole) && m.role !== 'owner' && m.id !== currentUserId;
     return `<tr>
       <td>${escapeHtml(m.name)}</td>
       <td>${escapeHtml(m.email)}</td>
       <td>${escapeHtml(roleLabel(m.role))}</td>
       <td>${escapeHtml(m.store || '')}</td>
       <td>${escapeHtml(m.phone || '')}</td>
+      <td>${m.is_active ? '' : '<span class="nla-tag">INACTIVE</span>'}</td>
       <td>
         ${canEdit ? `<button onclick="openAccountModal('${m.id}')">Edit</button>` : ''}
         ${canResetPassword ? `<button onclick="resetPassword('${m.id}', '${escapeHtml(m.name).replace(/'/g,"\\'")}')">Reset Password</button>` : ''}
+        ${canDeactivate ? `<button class="${m.is_active ? 'danger' : ''}" onclick="setAccountStatus('${m.id}', '${escapeHtml(m.name).replace(/'/g,"\\'")}', ${!m.is_active})">${m.is_active ? 'Deactivate' : 'Reactivate'}</button>` : ''}
         ${canDelete ? `<button class="danger" onclick="deleteAccount('${m.id}')">Delete</button>` : ''}
       </td>
     </tr>`;
   }).join('') + `</table>`;
+}
+
+async function setAccountStatus(id, name, active){
+  const verb = active ? 'reactivate' : 'deactivate';
+  const warning = active ? '' : ' They will be locked out immediately, even if currently logged in.';
+  if (!confirm(`Are you sure you want to ${verb} ${name}'s account?${warning}`)) return;
+
+  const { data, error } = await supabaseClient.functions.invoke('set-account-status', {
+    body: { target_user_id: id, active }
+  });
+
+  if (error || !data || !data.ok) {
+    let msg = error ? error.message : 'Unexpected response from server.';
+    try {
+      const body = await error.context.json();
+      if (body && body.error) msg = body.error;
+    } catch (e) {}
+    alert(`Could not ${verb} account: ` + msg);
+    return;
+  }
+
+  await loadAccounts();
 }
 
 function openAccountModal(id){
@@ -1647,11 +1728,20 @@ async function deleteAccount(id){
   const m = ACCOUNTS.find(x => x.id === id);
   if (!confirm('Delete "' + m.name + '"\'s account entirely? This cannot be undone.')) return;
 
-  const { error } = await supabaseClient.from('managers').delete().eq('id', id);
-  if (error) {
-    alert('Could not delete: ' + error.message);
+  const { data, error } = await supabaseClient.functions.invoke('delete-account', {
+    body: { target_user_id: id }
+  });
+
+  if (error || !data || !data.ok) {
+    let msg = error ? error.message : 'Unexpected response from server.';
+    try {
+      const body = await error.context.json();
+      if (body && body.error) msg = body.error;
+    } catch (e) {}
+    alert('Could not delete: ' + msg);
     return;
   }
+
   await loadAccounts();
 }
 
@@ -2052,6 +2142,7 @@ function logout(){
   document.getElementById('profile-store').value = '';
   document.getElementById('profile-phone').value = '';
   document.getElementById('profile-err').style.display = 'none';
+  hideForgotPassword();
   adminSearchTerm = '';
   accountsSearchTerm = '';
   editingProductId = null;
