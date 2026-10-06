@@ -185,6 +185,7 @@
   .admin-table img{width:36px;height:36px;object-fit:contain;background:rgba(255,255,255,0.06);border-radius:4px;}
   .admin-table .oos-tag{background:var(--oos);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;}
   .admin-table .nla-tag{background:#a02f2f;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;}
+  #demo-banner{position:relative;z-index:2;background:#8a6d1a;color:#fff;text-align:center;font-size:13px;font-weight:700;padding:6px 12px;}
   .pl-controls{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px;}
   .pl-controls .field{min-width:150px;}
   .pl-controls label{color:rgba(255,255,255,0.8);font-size:12.5px;font-weight:600;display:block;margin-bottom:4px;}
@@ -351,6 +352,7 @@
       <button onclick="logout()">Log Out</button>
     </div>
   </header>
+  <div id="demo-banner" style="display:none;">DEMO MODE &mdash; you can try everything, but nothing is saved or sent. Refresh the page to reset.</div>
 
   <div class="order-layout">
     <div class="cat-sidebar" id="cat-sidebar"></div>
@@ -718,6 +720,11 @@ const PRODUCT_EDIT_ROLES = ['owner', 'admin'];
 const PRODUCT_TOGGLE_ROLES = ['owner', 'admin', 'staff'];
 const CAN_SEE_ADMIN_ROLES = ['owner', 'admin', 'viewer', 'staff'];
 const PICKLIST_ROLES = ['owner', 'admin', 'staff'];
+// Demo account (viewer role): screens behave like an admin account, but every change happens only in this
+// browser tab and is never saved. Refreshing the page resets everything.
+function isDemo(){ return currentRole === 'viewer'; }
+let demoRequests = [];
+let demoSeq = 0;
 let pendingSubstituteFor = null;
 // Set to an email address to redirect every order email to that one inbox (testing); null sends to the real recipients.
 const EMAIL_TEST_OVERRIDE = null;
@@ -746,7 +753,8 @@ async function enterAppAsUser(userId){
   document.getElementById('user-name-label').textContent = profile.name;
   document.getElementById('user-role-badge').textContent = roleLabel(profile.role);
   document.getElementById('nav-admin').style.display = CAN_SEE_ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
-  document.getElementById('nav-request').style.display = profile.role === 'staff' ? 'inline-block' : 'none';
+  document.getElementById('nav-request').style.display = (profile.role === 'staff' || profile.role === 'viewer') ? 'inline-block' : 'none';
+  document.getElementById('demo-banner').style.display = profile.role === 'viewer' ? 'block' : 'none';
   document.getElementById('nav-requests').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-picklists').style.display = PICKLIST_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-accounts').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
@@ -755,6 +763,7 @@ async function enterAppAsUser(userId){
   switchView('order');
 
   await loadProducts();
+  if (isDemo()) demoSeedRequests();
   await loadSitePickerSection();
   await loadMyFilters();
   return null;
@@ -928,7 +937,7 @@ function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;"
 
 function resolveImageSrc(image_url){
   if (!image_url) return null;
-  if (image_url.startsWith('http://') || image_url.startsWith('https://')) return image_url;
+  if (image_url.startsWith('http://') || image_url.startsWith('https://') || image_url.startsWith('blob:')) return image_url;
   return 'images/' + encodeURIComponent(image_url);
 }
 
@@ -1101,8 +1110,12 @@ async function confirmSubmitOrder(){
   }
 
   if (currentRole === 'viewer') {
-    alert("This is a demo account, so it can't place real orders — feel free to keep exploring everything else!");
+    orderCart = {};
+    removeFiltersFromCart();
+    document.getElementById('order-comment-box').value = '';
     closeReviewModal();
+    document.getElementById('success-message').textContent = 'Demo order submitted. Nothing was saved, and no emails were sent.';
+    document.getElementById('success-modal').classList.add('active');
     return;
   }
 
@@ -1708,13 +1721,13 @@ document.getElementById('admin-search-box').addEventListener('input', function(e
 });
 
 function renderAdminProducts(){
-  document.getElementById('add-product-btn').style.display = PRODUCT_EDIT_ROLES.includes(currentRole) ? 'inline-block' : 'none';
+  document.getElementById('add-product-btn').style.display = (PRODUCT_EDIT_ROLES.includes(currentRole) || isDemo()) ? 'inline-block' : 'none';
 
   let list = PRODUCTS;
   if (adminSearchTerm) list = list.filter(p => p.name.toLowerCase().includes(adminSearchTerm));
 
-  const canToggle = PRODUCT_TOGGLE_ROLES.includes(currentRole);
-  const canEdit = PRODUCT_EDIT_ROLES.includes(currentRole);
+  const canToggle = PRODUCT_TOGGLE_ROLES.includes(currentRole) || isDemo();
+  const canEdit = PRODUCT_EDIT_ROLES.includes(currentRole) || isDemo();
 
   document.getElementById('admin-product-rows').innerHTML = `<table class="admin-table">
     <tr><th></th><th>Name</th><th>Category</th><th>Routing</th><th>VIN</th><th>Status</th><th>Substitute</th><th></th></tr>` + list.map(p => {
@@ -1742,6 +1755,13 @@ function renderAdminProducts(){
 }
 
 async function toggleProductFlag(id, field, value){
+  if (isDemo()) {
+    const p = PRODUCTS.find(x => x.id === id);
+    if (p) p[field] = value;
+    renderProductGrid();
+    renderAdminProducts();
+    return;
+  }
   const { error } = await supabaseClient.from('products').update({ [field]: value }).eq('id', id);
   if (error) {
     alert('Could not update: ' + error.message);
@@ -1829,6 +1849,11 @@ async function saveProduct(){
     return;
   }
 
+  if (isDemo()) {
+    demoSaveProduct(name, category, routing_group, vin);
+    return;
+  }
+
   const btn = document.getElementById('save-product-btn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
@@ -1887,9 +1912,46 @@ async function saveProduct(){
   renderAdminProducts();
 }
 
+function demoSaveProduct(name, category, routing_group, vin){
+  let image_url = editingProductId ? PRODUCTS.find(p => p.id === editingProductId).image_url : null;
+  if (productImageFile) image_url = URL.createObjectURL(productImageFile);
+
+  if (editingProductId) {
+    const p = PRODUCTS.find(x => x.id === editingProductId);
+    Object.assign(p, {
+      name, category, routing_group, vin, image_url,
+      out_of_stock: document.getElementById('product-oos').checked,
+      no_longer_available: document.getElementById('product-nla').checked,
+      substitute_product_id: document.getElementById('product-substitute').value || null
+    });
+  } else {
+    const np = { id: 'demo-' + (++demoSeq), name, category, routing_group, vin, image_url, out_of_stock: false, no_longer_available: false, substitute_product_id: null };
+    PRODUCTS.push(np);
+    PRODUCTS.sort((a, b) => a.name.localeCompare(b.name));
+    if (pendingSubstituteFor) {
+      const target = PRODUCTS.find(x => x.id === pendingSubstituteFor);
+      if (target) target.substitute_product_id = np.id;
+      pendingSubstituteFor = null;
+    }
+  }
+  closeProductModal();
+  renderCatSidebar();
+  renderProductGrid();
+  renderAdminProducts();
+}
+
 async function deleteProduct(id){
   const p = PRODUCTS.find(x => x.id === id);
   if (!confirm('Delete "' + p.name + '" from the catalog entirely?')) return;
+
+  if (isDemo()) {
+    PRODUCTS = PRODUCTS.filter(x => x.id !== id);
+    PRODUCTS.forEach(x => { if (x.substitute_product_id === id) x.substitute_product_id = null; });
+    renderCatSidebar();
+    renderProductGrid();
+    renderAdminProducts();
+    return;
+  }
 
   const { error } = await supabaseClient.from('products').delete().eq('id', id);
   if (error) {
@@ -2269,9 +2331,17 @@ async function submitProductRequest(){
     return;
   }
 
-  const { error } = await supabaseClient.from('product_requests').insert({
-    requested_by: currentUserId, name, category, image_url, notes, request_type, replaces_product_id
-  });
+  let error = null;
+  if (isDemo()) {
+    demoRequests.unshift({
+      id: 'demo-req-' + (++demoSeq), name, category, image_url, notes, request_type, replaces_product_id,
+      status: 'pending', created_at: new Date().toISOString(), managers: { name: 'Demo Account', store: 'Corporate' }
+    });
+  } else {
+    ({ error } = await supabaseClient.from('product_requests').insert({
+      requested_by: currentUserId, name, category, image_url, notes, request_type, replaces_product_id
+    }));
+  }
 
   if (error) {
     errBox.textContent = 'Could not submit: ' + error.message;
@@ -2297,11 +2367,13 @@ function requestTypeBadge(r){
 }
 
 async function loadMyRequests(){
-  const { data, error } = await supabaseClient
-    .from('product_requests')
-    .select('id, name, category, notes, status, created_at, request_type, replaces_product_id')
-    .eq('requested_by', currentUserId)
-    .order('created_at', { ascending: false });
+  const { data, error } = isDemo()
+    ? { data: demoRequests, error: null }
+    : await supabaseClient
+        .from('product_requests')
+        .select('id, name, category, notes, status, created_at, request_type, replaces_product_id')
+        .eq('requested_by', currentUserId)
+        .order('created_at', { ascending: false });
 
   const container = document.getElementById('my-requests-list');
   if (error) {
@@ -2325,10 +2397,12 @@ async function loadMyRequests(){
 }
 
 async function loadRequestsQueue(){
-  const { data, error } = await supabaseClient
-    .from('product_requests')
-    .select('id, name, category, image_url, notes, status, created_at, request_type, replaces_product_id, managers!product_requests_requested_by_fkey(name, store)')
-    .order('created_at', { ascending: false });
+  const { data, error } = isDemo()
+    ? { data: demoRequests, error: null }
+    : await supabaseClient
+        .from('product_requests')
+        .select('id, name, category, image_url, notes, status, created_at, request_type, replaces_product_id, managers!product_requests_requested_by_fkey(name, store)')
+        .order('created_at', { ascending: false });
 
   if (error) {
     document.getElementById('pending-requests-list').innerHTML = '<div style="color:#ff8080;">Could not load requests: ' + error.message + '</div>';
@@ -2357,7 +2431,7 @@ function renderPendingRequests(list){
       <div class="req-detail">Category: ${escapeHtml(r.category || '')}</div>
       ${r.image_url ? `<div class="req-detail">Image: <a href="${escapeHtml(r.image_url)}" target="_blank" rel="noopener" style="color:var(--accent-light);">${escapeHtml(r.image_url)}</a></div>` : ''}
       ${r.notes ? `<div class="req-detail">${escapeHtml(r.notes)}</div>` : ''}
-      ${currentRole === 'viewer' ? '' : `<div class="req-actions">
+      ${`<div class="req-actions">
         <button class="btn-add" onclick="approveRequest('${r.id}', '${escapeHtml(r.name).replace(/'/g,"\\'")}', '${escapeHtml(r.category || '').replace(/'/g,"\\'")}', '${r.request_type}', ${r.replaces_product_id ? `'${r.replaces_product_id}'` : 'null'})">Approve</button>
         <button onclick="rejectRequest('${r.id}')" style="padding:9px 16px;border-radius:6px;border:1px solid #a02f2f;background:rgba(160,47,47,0.2);color:#ff9b9b;font-size:14px;cursor:pointer;">Reject</button>
       </div>`}
@@ -2384,13 +2458,18 @@ function renderReviewedRequests(list){
 }
 
 async function approveRequest(id, name, category, requestType, replacesProductId){
-  const { error } = await supabaseClient
-    .from('product_requests')
-    .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) {
-    alert('Could not approve: ' + error.message);
-    return;
+  if (isDemo()) {
+    const dr = demoRequests.find(x => x.id === id);
+    if (dr) dr.status = 'approved';
+  } else {
+    const { error } = await supabaseClient
+      .from('product_requests')
+      .update({ status: 'approved', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) {
+      alert('Could not approve: ' + error.message);
+      return;
+    }
   }
   pendingSubstituteFor = requestType === 'substitute' ? replacesProductId : null;
   await loadRequestsQueue();
@@ -2403,6 +2482,12 @@ async function approveRequest(id, name, category, requestType, replacesProductId
 }
 
 async function rejectRequest(id){
+  if (isDemo()) {
+    const dr = demoRequests.find(x => x.id === id);
+    if (dr) dr.status = 'rejected';
+    await loadRequestsQueue();
+    return;
+  }
   const { error } = await supabaseClient
     .from('product_requests')
     .update({ status: 'rejected', reviewed_by: currentUserId, reviewed_at: new Date().toISOString() })
@@ -2412,6 +2497,20 @@ async function rejectRequest(id){
     return;
   }
   await loadRequestsQueue();
+}
+
+function demoSeedRequests(){
+  if (demoRequests.length > 0) return;
+  const iceBag = PRODUCTS.find(p => /Ice Bag/i.test(p.name)) || PRODUCTS[0];
+  const now = Date.now();
+  demoRequests = [
+    { id: 'demo-req-' + (++demoSeq), name: 'GNG Laminated Hand-Washing Signs', category: 'Office Supplies', image_url: null,
+      notes: 'Stores keep asking for these.', request_type: 'new', replaces_product_id: null, status: 'pending',
+      created_at: new Date(now - 3600000).toISOString(), managers: { name: 'Shana Atkinson', store: 'Corporate' } },
+    { id: 'demo-req-' + (++demoSeq), name: 'PBO Ice Bag Wicket Style - 20 lb (new supplier)', category: iceBag ? iceBag.category : 'Bags', image_url: null,
+      notes: 'Current ice bags are on backorder.', request_type: 'substitute', replaces_product_id: iceBag ? iceBag.id : null, status: 'pending',
+      created_at: new Date(now - 7200000).toISOString(), managers: { name: 'John Cook', store: 'Corporate' } }
+  ];
 }
 
 function logout(){
@@ -2443,6 +2542,8 @@ function logout(){
   document.getElementById('nav-request').style.display = 'none';
   document.getElementById('nav-requests').style.display = 'none';
   document.getElementById('nav-picklists').style.display = 'none';
+  document.getElementById('demo-banner').style.display = 'none';
+  demoRequests = [];
   plOrders = [];
   document.getElementById('pl-list').innerHTML = '';
   document.getElementById('nav-accounts').style.display = 'none';
