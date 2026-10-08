@@ -78,6 +78,25 @@
   .add-btn{margin-top:8px;width:100%;padding:7px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;}
   .add-btn:hover{background:var(--accent-dark);}
   .add-btn:disabled{background:var(--oos);cursor:not-allowed;}
+  .add-btn{transition:background .2s,transform .12s;}
+  .add-btn:active:not(:disabled){transform:scale(.96);}
+  .add-btn.added{background:#1a7a4a;}
+  .card.enter{animation:cardIn .42s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i,0)*26ms);}
+  @keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.98);}to{opacity:1;transform:none;}}
+  .order-layout,.admin-view{animation:viewIn .3s cubic-bezier(.2,.7,.2,1);}
+  @keyframes viewIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .cart-line.new{animation:lineIn .3s ease both;}
+  @keyframes lineIn{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
+  .bump{animation:bump .4s cubic-bezier(.3,1.8,.5,1);}
+  @keyframes bump{0%{transform:scale(1);}40%{transform:scale(1.5);}100%{transform:scale(1);}}
+  .fly-img{position:fixed;z-index:500;pointer-events:none;border-radius:8px;object-fit:contain;background:#f1f4f9;box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  #toasts{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:450;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;max-width:calc(100vw - 32px);}
+  .toast{background:#0b1322;border:1px solid #2e4570;border-left:4px solid #8dc63f;border-radius:10px;padding:10px 16px;display:flex;gap:14px;align-items:center;box-shadow:0 14px 40px rgba(0,0,0,.55);font-size:14px;color:#fff;pointer-events:auto;animation:toastIn .3s cubic-bezier(.2,.9,.3,1.2) both;}
+  .toast.out{animation:toastOut .25s ease forwards;}
+  .toast button{background:none;border:0;color:#00ccff;font-weight:700;cursor:pointer;padding:2px 4px;font-size:14px;}
+  @keyframes toastIn{from{opacity:0;transform:translateY(16px) scale(.96);}to{opacity:1;transform:none;}}
+  @keyframes toastOut{to{opacity:0;transform:translateY(8px);}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 
   .order-sidebar{border-left:1px solid rgba(255,255,255,0.1);padding:18px;position:sticky;top:56px;align-self:start;max-height:calc(100vh - 56px);display:flex;flex-direction:column;}
   .order-sidebar h3{margin:0 0 14px;font-size:15.5px;text-shadow:0 1px 3px rgba(0,0,0,0.8);}
@@ -357,6 +376,7 @@
   </header>
   <div id="demo-banner" style="display:none;">DEMO MODE &mdash; you can try everything, but nothing is saved or sent. Refresh the page to reset.</div>
 
+  <div id="toasts" aria-live="polite"></div>
   <div class="order-layout">
     <div class="cat-sidebar" id="cat-sidebar"></div>
     <div class="catalog-main">
@@ -944,6 +964,7 @@ function resolveImageSrc(image_url){
   return 'images/' + encodeURIComponent(image_url);
 }
 
+let lastGridSig = '';
 function renderProductGrid(){
   let list = PRODUCTS;
   if (activeCategory !== 'ALL') {
@@ -958,7 +979,10 @@ function renderProductGrid(){
     return;
   }
 
-  document.getElementById('product-grid').innerHTML = list.map(p => {
+  const gridSig = activeCategory + '|' + searchTerm + '|' + list.length;
+  const animateGrid = gridSig !== lastGridSig;
+  lastGridSig = gridSig;
+  document.getElementById('product-grid').innerHTML = list.map((p, idx) => {
     const qty = cart[p.id] || 1;
     const imgSrc = resolveImageSrc(p.image_url);
     const imgHtml = imgSrc ? `<img src="${imgSrc}" alt="">` : `<div class="noimg">No image on file</div>`;
@@ -966,7 +990,7 @@ function renderProductGrid(){
     const badge = p.no_longer_available ? '<div class="oos-badge nla-badge">No Longer Available</div>' : (p.out_of_stock ? '<div class="oos-badge">Out of Stock</div>' : '');
     const sub = unavailable && p.substitute_product_id ? PRODUCTS.find(x => x.id === p.substitute_product_id) : null;
     const subNote = sub ? `<div class="sub-note">Try instead: ${escapeHtml(sub.name)}</div>` : '';
-    return `<div class="card ${unavailable?'oos':''}">
+    return `<div class="card ${unavailable?'oos':''}${animateGrid?' enter':''}" style="--i:${Math.min(idx,14)}">
       ${badge}
       <div class="imgwrap">${imgHtml}</div>
       <div class="body">
@@ -977,7 +1001,7 @@ function renderProductGrid(){
           <input type="number" min="1" value="${qty}" onchange="setQty('${p.id}', this.value)">
           <button onclick="stepQty('${p.id}',1)">+</button>
         </div>
-        <button class="add-btn" ${unavailable?'disabled':''} onclick="addToCart('${p.id}')">${unavailable?'Unavailable':'Add to Order'}</button>
+        <button class="add-btn" ${unavailable?'disabled':''} onclick="addToCart('${p.id}', this)">${unavailable?'Unavailable':'Add to Order'}</button>
       </div>
     </div>`;
   }).join('');
@@ -994,12 +1018,63 @@ function stepQty(id, delta){
 function setQty(id, val){
   cart[id] = Math.max(1, parseInt(val, 10) || 1);
 }
-function addToCart(id){
+let lastAddedId = null;
+function showToast(msg, actionLabel, actionFn){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  const span = document.createElement('span');
+  span.textContent = msg;
+  t.appendChild(span);
+  const kill = () => { t.classList.add('out'); setTimeout(() => t.remove(), 250); };
+  if (actionLabel) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = actionLabel;
+    b.onclick = () => { actionFn && actionFn(); kill(); };
+    t.appendChild(b);
+  }
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(kill, 3200);
+}
+function bumpCartCount(){
+  ['cart-count', 'mobile-cart-count'].forEach(i => {
+    const e = document.getElementById(i);
+    if (!e || e.offsetParent === null) return;
+    e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump');
+  });
+}
+function flyToCart(btn){
+  const card = btn && btn.closest ? btn.closest('.card') : null;
+  const src = card ? card.querySelector('.imgwrap img') : null;
+  let tgt = document.getElementById('cart-count');
+  if (!tgt || tgt.offsetParent === null) tgt = document.getElementById('mobile-cart-count');
+  if (!src || !tgt || window.matchMedia('(prefers-reduced-motion:reduce)').matches) { bumpCartCount(); return; }
+  const a = src.getBoundingClientRect(), b = tgt.getBoundingClientRect();
+  const f = document.createElement('img');
+  f.className = 'fly-img'; f.src = src.src;
+  f.style.cssText = 'left:' + a.left + 'px;top:' + a.top + 'px;width:' + a.width + 'px;height:' + a.height + 'px';
+  document.body.appendChild(f);
+  const dx = b.left - a.left + b.width / 2 - a.width / 2, dy = b.top - a.top + b.height / 2 - a.height / 2;
+  f.animate([{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.15)', opacity: .4 }], { duration: 600, easing: 'cubic-bezier(.5,0,.2,1)' });
+  setTimeout(() => { f.remove(); bumpCartCount(); }, 620);
+}
+function addToCart(id, btn){
   const p = PRODUCTS.find(x => x.id === id);
   if (!p) return;
   const qty = cart[id] || 1;
+  const prev = orderCart[id];
   orderCart[id] = qty;
+  lastAddedId = id;
   renderCart();
+  flyToCart(btn);
+  if (btn) {
+    const old = btn.textContent;
+    btn.classList.add('added'); btn.textContent = '✓ Added';
+    setTimeout(() => { btn.classList.remove('added'); btn.textContent = old; }, 1100);
+  }
+  showToast(qty + ' × ' + p.name + ' added', 'Undo', () => {
+    if (prev === undefined) delete orderCart[id]; else orderCart[id] = prev;
+    renderCart();
+  });
 }
 function removeFromCart(id){
   delete orderCart[id];
@@ -1027,7 +1102,7 @@ function renderCart(){
     if (!p) return '';
     const qty = orderCart[id];
     totalItems += qty;
-    return `<div class="cart-line">
+    return `<div class="cart-line${id === lastAddedId ? ' new' : ''}">
       <span>${escapeHtml(p.name)} &times; ${qty}</span>
       <button class="remove" onclick="removeFromCart('${id}')">&times;</button>
     </div>`;
