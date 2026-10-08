@@ -205,6 +205,9 @@
   .pl-row .pl-main{flex:1;min-width:0;}
   .pl-row .pl-title{font-weight:700;font-size:14.5px;}
   .pl-row .pl-sub{font-size:12.5px;color:rgba(255,255,255,0.65);margin-top:2px;}
+  .pl-tag{display:inline-block;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-right:6px;vertical-align:1px;}
+  .pl-tag-PBO{background:#1b3a6b;}
+  .pl-tag-GNG{background:#c8102e;}
   .pl-done-tag{background:#1a7a4a;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;}
   .order-comment-note{margin-top:10px;padding:8px 10px;background:rgba(0,204,255,0.1);border:1px solid rgba(0,204,255,0.35);border-radius:6px;font-size:13px;color:#fff;}
   .admin-table button{padding:5px 10px;border-radius:5px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.1);color:#fff;font-size:12.5px;cursor:pointer;margin-right:6px;}
@@ -1462,24 +1465,40 @@ function renderPreviewTab(tab){
 
 /* ===== Pick Lists: batch printing for fulfillment staff ===== */
 const PL_GROUPS = {
-  PBO: { label: 'PBO Warehouse Pick List', accent: '#1b3a6b', routings: ['PBO'], col: 'pbo_processed_at' },
-  GNG: { label: 'GNG Pick List', accent: '#c8102e', routings: ['GNG', 'FILTER'], col: 'gng_processed_at' }
+  PBO: { label: 'PBO Warehouse Pick List', routings: ['PBO'], col: 'pbo_processed_at' },
+  GNG: { label: 'GNG Pick List', routings: ['GNG', 'FILTER'], col: 'gng_processed_at' }
 };
 let plOrders = [];
-let plSelected = new Set();
+let plSelected = new Set(); // keys look like "<orderId>|<PBO or GNG>"
 
-function plGroupKey(){ return document.getElementById('pl-group').value; }
+function plPrefGet(name){ try { return localStorage.getItem('pl-' + currentUserId + '-' + name); } catch (e) { return null; } }
+function plPrefSet(name, value){ try { localStorage.setItem('pl-' + currentUserId + '-' + name, value); } catch (e) {} }
+function plCanSeeBoth(){ return currentRole === 'owner' || currentRole === 'admin'; }
+function plGroupValue(){ return document.getElementById('pl-group').value; }
+function plActiveGroups(){ const v = plGroupValue(); return v === 'ALL' ? ['PBO', 'GNG'] : [v]; }
 function plItemsFor(order, g){ return order.order_items.filter(oi => PL_GROUPS[g].routings.includes(oi.routing_group_snapshot)); }
 function plOrderId(o){ const m = o.managers || {}; return m.site_number ? `${m.site_number}-${o.order_number}` : `Corporate-${o.order_number}`; }
 function plStoreLabel(o){ const m = o.managers || {}; return m.site_number ? siteLabel(m) : (m.name || m.store || ''); }
 
 async function loadPickLists(){
-  try {
-    const saved = localStorage.getItem('pl-group');
-    if (saved && PL_GROUPS[saved]) document.getElementById('pl-group').value = saved;
-    const auto = localStorage.getItem('pl-auto');
-    if (auto !== null) document.getElementById('pl-auto').checked = auto === '1';
-  } catch (e) {}
+  const sel = document.getElementById('pl-group');
+  const bothOpt = sel.querySelector('option[value="ALL"]');
+  if (plCanSeeBoth() && !bothOpt) {
+    const opt = document.createElement('option');
+    opt.value = 'ALL';
+    opt.textContent = 'Both lists (PBO + GNG)';
+    sel.insertBefore(opt, sel.firstChild);
+  } else if (!plCanSeeBoth() && bothOpt) {
+    bothOpt.remove();
+  }
+  const validGroups = plCanSeeBoth() ? ['ALL', 'PBO', 'GNG'] : ['PBO', 'GNG'];
+  const savedGroup = plPrefGet('group');
+  sel.value = validGroups.includes(savedGroup) ? savedGroup : (plCanSeeBoth() ? 'ALL' : 'PBO');
+  const savedStatus = plPrefGet('status');
+  if (['open', 'done', 'all'].includes(savedStatus)) document.getElementById('pl-status').value = savedStatus;
+  const savedAuto = plPrefGet('auto');
+  if (savedAuto !== null) document.getElementById('pl-auto').checked = savedAuto === '1';
+
   document.getElementById('pl-list').innerHTML = '<div style="color:#00ccff;">Loading...</div>';
   const { data, error } = await supabaseClient
     .from('orders')
@@ -1496,77 +1515,84 @@ async function loadPickLists(){
 }
 
 function savePickListAuto(){
-  try { localStorage.setItem('pl-auto', document.getElementById('pl-auto').checked ? '1' : '0'); } catch (e) {}
+  plPrefSet('auto', document.getElementById('pl-auto').checked ? '1' : '0');
 }
 
 async function plSetProcessed(ids, g, processed){
   return supabaseClient.rpc('set_orders_processed', { p_order_ids: ids, p_group: g, p_processed: processed });
 }
 
-function showPickListBanner(ids, g){
+function showPickListBanner(batches){
+  const total = batches.reduce((n, b) => n + b.ids.length, 0);
   const b = document.getElementById('pl-banner');
-  b.innerHTML = '<span>' + ids.length + ' order' + (ids.length === 1 ? '' : 's') + ' marked as processed.</span><button type="button" id="pl-undo-btn">Undo</button>';
+  b.innerHTML = '<span>' + total + ' order' + (total === 1 ? '' : 's') + ' marked as processed.</span><button type="button" id="pl-undo-btn">Undo</button>';
   b.style.display = 'flex';
   document.getElementById('pl-undo-btn').onclick = async function(){
-    const { error } = await plSetProcessed(ids, g, false);
-    if (error) { alert('Could not undo: ' + error.message); return; }
+    for (const batch of batches) {
+      const { error } = await plSetProcessed(batch.ids, batch.g, false);
+      if (error) { alert('Could not undo: ' + error.message); return; }
+    }
     b.style.display = 'none';
     await loadPickLists();
   };
 }
 
 function onPickListFilterChange(){
+  plPrefSet('group', plGroupValue());
+  plPrefSet('status', document.getElementById('pl-status').value);
   document.getElementById('pl-banner').style.display = 'none';
-  try { localStorage.setItem('pl-group', plGroupKey()); } catch (e) {}
   plSelected = new Set();
   renderPickLists();
 }
 
-function plVisibleOrders(){
-  const g = plGroupKey();
+function plVisibleRows(){
   const status = document.getElementById('pl-status').value;
   const from = document.getElementById('pl-from').value;
   const to = document.getElementById('pl-to').value;
   const fromD = from ? new Date(from + 'T00:00:00') : null;
   const toD = to ? new Date(to + 'T23:59:59') : null;
-  return plOrders.filter(o => {
-    if (plItemsFor(o, g).length === 0) return false;
-    const done = !!o[PL_GROUPS[g].col];
-    if (status === 'open' && done) return false;
-    if (status === 'done' && !done) return false;
-    const d = new Date(o.created_at);
-    if (fromD && d < fromD) return false;
-    if (toD && d > toD) return false;
-    return true;
+  const rows = [];
+  plActiveGroups().forEach(g => {
+    plOrders.forEach(o => {
+      if (plItemsFor(o, g).length === 0) return;
+      const done = !!o[PL_GROUPS[g].col];
+      if (status === 'open' && done) return;
+      if (status === 'done' && !done) return;
+      const d = new Date(o.created_at);
+      if (fromD && d < fromD) return;
+      if (toD && d > toD) return;
+      rows.push({ o, g, key: o.id + '|' + g, done });
+    });
   });
+  return rows;
 }
 
 function renderPickLists(){
-  const g = plGroupKey();
   const status = document.getElementById('pl-status').value;
-  const list = plVisibleOrders();
-  const visibleIds = new Set(list.map(o => o.id));
-  plSelected = new Set([...plSelected].filter(id => visibleIds.has(id)));
+  const showTag = plGroupValue() === 'ALL';
+  const rows = plVisibleRows();
+  const visibleKeys = new Set(rows.map(r => r.key));
+  plSelected = new Set([...plSelected].filter(k => visibleKeys.has(k)));
 
   document.getElementById('pl-mark-btn').textContent = status === 'done' ? 'Mark selected as NOT processed' : 'Mark selected as processed';
 
-  if (list.length === 0) {
+  if (rows.length === 0) {
     document.getElementById('pl-list').innerHTML = '<div style="color:#00ccff;">No orders match.</div>';
   } else {
-    document.getElementById('pl-list').innerHTML = list.map(o => {
-      const items = plItemsFor(o, g);
-      const done = !!o[PL_GROUPS[g].col];
+    document.getElementById('pl-list').innerHTML = rows.map(r => {
+      const o = r.o;
+      const items = plItemsFor(o, r.g);
       return `<label class="pl-row">
-        <input type="checkbox" ${plSelected.has(o.id) ? 'checked' : ''} onchange="togglePickListRow('${o.id}', this.checked)">
+        <input type="checkbox" ${plSelected.has(r.key) ? 'checked' : ''} onchange="togglePickListRow('${r.key}', this.checked)">
         <div class="pl-main">
-          <div class="pl-title">${escapeHtml(plStoreLabel(o))} &mdash; Order #${o.order_number}</div>
+          <div class="pl-title">${showTag ? `<span class="pl-tag pl-tag-${r.g}">${r.g}</span> ` : ''}${escapeHtml(plStoreLabel(o))} &mdash; Order #${o.order_number}</div>
           <div class="pl-sub">${escapeHtml(new Date(o.created_at).toLocaleString())} &middot; ${items.length} line item${items.length === 1 ? '' : 's'}${o.comments ? ' &middot; has comment' : ''}</div>
         </div>
-        ${done ? '<span class="pl-done-tag">Processed</span>' : ''}
+        ${r.done ? '<span class="pl-done-tag">Processed</span>' : ''}
       </label>`;
     }).join('');
   }
-  updatePickListCount(list.length);
+  updatePickListCount(rows.length);
 }
 
 function updatePickListCount(visibleCount){
@@ -1574,32 +1600,87 @@ function updatePickListCount(visibleCount){
   document.getElementById('pl-select-all').checked = visibleCount > 0 && plSelected.size === visibleCount;
 }
 
-function togglePickListRow(id, checked){
-  if (checked) plSelected.add(id); else plSelected.delete(id);
-  updatePickListCount(plVisibleOrders().length);
+function togglePickListRow(key, checked){
+  if (checked) plSelected.add(key); else plSelected.delete(key);
+  updatePickListCount(plVisibleRows().length);
 }
 
 function togglePickListSelectAll(checked){
-  const list = plVisibleOrders();
-  plSelected = checked ? new Set(list.map(o => o.id)) : new Set();
+  plSelected = checked ? new Set(plVisibleRows().map(r => r.key)) : new Set();
   renderPickLists();
 }
 
-function plSelectedOrders(){
-  return plVisibleOrders().filter(o => plSelected.has(o.id));
+function plSelectedRows(){
+  return plVisibleRows().filter(r => plSelected.has(r.key));
+}
+
+function plHeaderHtml(label, now){
+  return '<div class="header"><div><div class="company">PERRY BROTHERS OIL COMPANY</div><div class="list-title">' + escapeHtml(label) + '</div></div><div class="header-right">Generated: ' + escapeHtml(now) + '</div></div>';
+}
+
+function plIndividualHtml(orders, g, now){
+  const cfg = PL_GROUPS[g];
+  return orders.map(o => {
+    const m = o.managers || {};
+    const rows = plItemsFor(o, g).map(oi =>
+      '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(oi.vin_snapshot || '—') + '</td><td>' + escapeHtml(oi.product_name_snapshot) + '</td><td class="center">' + oi.quantity + '</td><td></td><td></td></tr>'
+    ).join('');
+    return '<div class="ticket">' + plHeaderHtml(cfg.label, now) +
+      '<div class="info-box">' +
+        '<div><div class="info-label">Store / Customer</div><div class="info-value">' + escapeHtml(plStoreLabel(o)) + '</div><div class="info-sub">' + escapeHtml(m.site_address || '') + '</div></div>' +
+        '<div><div class="info-label">Order Placed</div><div class="info-value">' + escapeHtml(new Date(o.created_at).toLocaleString()) + '</div></div>' +
+        '<div><div class="info-label">PBO2GO Order ID</div><div class="info-value">' + escapeHtml(plOrderId(o)) + '</div></div>' +
+      '</div>' +
+      (o.comments ? '<div class="note"><b>Order comment:</b> ' + escapeHtml(o.comments) + '</div>' : '') +
+      '<table><thead><tr><th class="center" style="width:12%">VIN</th><th style="width:42%">Description</th><th class="center" style="width:9%">Ord Qty</th><th class="center" style="width:13%">Picked Qty</th><th style="width:24%">Notes</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '</div>';
+  }).join('');
+}
+
+function plCombinedHtml(orders, g, now){
+  const cfg = PL_GROUPS[g];
+  const agg = new Map();
+  orders.forEach(o => {
+    plItemsFor(o, g).forEach(oi => {
+      const key = (oi.vin_snapshot || '') + '|' + oi.product_name_snapshot;
+      if (!agg.has(key)) agg.set(key, { vin: oi.vin_snapshot || '—', desc: oi.product_name_snapshot, total: 0, stores: new Map() });
+      const a = agg.get(key);
+      a.total += oi.quantity;
+      const lbl = (o.managers && o.managers.site_number) ? String(o.managers.site_number) : plStoreLabel(o);
+      a.stores.set(lbl, (a.stores.get(lbl) || 0) + oi.quantity);
+    });
+  });
+  const lines = [...agg.values()].sort((a, b) => a.desc.localeCompare(b.desc));
+  const rows = lines.map(a =>
+    '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(a.vin) + '</td><td>' + escapeHtml(a.desc) + '</td><td class="center"><b>' + a.total + '</b></td><td>' + escapeHtml([...a.stores.entries()].map(([s, q]) => s + ': ' + q).join(', ')) + '</td><td></td></tr>'
+  ).join('');
+  const commented = orders.filter(o => o.comments);
+  const first = new Date(orders[0].created_at).toLocaleDateString();
+  const last = new Date(orders[orders.length - 1].created_at).toLocaleDateString();
+  return '<div>' + plHeaderHtml(cfg.label + ' — Combined Summary', now) +
+    '<div class="info-box">' +
+      '<div><div class="info-label">Orders Included</div><div class="info-value">' + orders.length + '</div></div>' +
+      '<div><div class="info-label">Order Dates</div><div class="info-value">' + escapeHtml(first === last ? first : first + ' – ' + last) + '</div></div>' +
+      '<div><div class="info-label">Unique Items</div><div class="info-value">' + lines.length + '</div></div>' +
+    '</div>' +
+    '<table><thead><tr><th class="center" style="width:11%">VIN</th><th style="width:36%">Description</th><th class="center" style="width:10%">Total Qty</th><th style="width:30%">By Store (site: qty)</th><th style="width:13%">Picked</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    (commented.length ? '<div class="note"><b>Order comments:</b><br>' + commented.map(o => escapeHtml(plOrderId(o)) + ' (' + escapeHtml(plStoreLabel(o)) + '): ' + escapeHtml(o.comments)).join('<br>') + '</div>' : '') +
+  '</div>';
 }
 
 async function printSelectedPickLists(mode){
-  const orders = plSelectedOrders();
-  if (orders.length === 0) { alert('Select at least one order first.'); return; }
-  const g = plGroupKey();
-  const cfg = PL_GROUPS[g];
+  const rows = plSelectedRows();
+  if (rows.length === 0) { alert('Select at least one order first.'); return; }
+  const groupsPresent = ['PBO', 'GNG'].filter(g => rows.some(r => r.g === g));
   const now = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+  const docLabel = groupsPresent.length === 1 ? PL_GROUPS[groupsPresent[0]].label : 'Pick Lists (PBO + GNG)';
 
   const css = '@page{size:letter portrait;margin:0.6in 0.55in 0.7in 0.55in}' +
     '*{box-sizing:border-box;margin:0;padding:0}' +
     'body{font-family:Arial,Helvetica,sans-serif;font-size:9pt;color:#111}' +
-    '.header{background:' + cfg.accent + ';color:#fff;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-end}' +
+    '.g-PBO .header,.g-PBO thead tr{background:#1b3a6b;color:#fff}' +
+    '.g-GNG .header,.g-GNG thead tr{background:#c8102e;color:#fff}' +
+    '.header{padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-end}' +
     '.company{font-size:14pt;font-weight:700;letter-spacing:.3px}' +
     '.list-title{font-size:10pt;margin-top:2px;opacity:.9}' +
     '.header-right{font-size:7.5pt;opacity:.85;text-align:right}' +
@@ -1608,68 +1689,26 @@ async function printSelectedPickLists(mode){
     '.info-value{font-size:9pt;font-weight:600;color:#111}' +
     '.info-sub{font-size:7.5pt;color:#6b7280;margin-top:1px}' +
     'table{width:100%;border-collapse:collapse;margin-bottom:10px}' +
-    'thead tr{background:' + cfg.accent + ';color:#fff}' +
     'thead th{padding:5px 6px;text-align:left;font-size:8pt;font-weight:700;letter-spacing:.3px}' +
     'thead th.center{text-align:center}' +
     'tbody tr:nth-child(even){background:#f9fafb}' +
     'tbody td{padding:5px 6px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:8.5pt}' +
     '.center{text-align:center}' +
     '.note{border:1px solid #d1d5db;background:#f9fafb;padding:6px 10px;font-size:8.5pt;margin-bottom:10px}' +
-    '.ticket{page-break-after:always}.ticket:last-of-type{page-break-after:auto}' +
+    '.ticket{page-break-after:always}' +
+    '#docs>.grp{page-break-after:always}#docs>.grp:last-child{page-break-after:auto}' +
+    '.grp>.ticket:last-child{page-break-after:auto}' +
     '.footer{position:fixed;bottom:0.35in;left:0.55in;right:0.55in;border-top:1px solid #9ca3af;padding-top:6px;display:flex;justify-content:space-between;font-size:8pt;color:#374151}' +
     '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
 
-  const header = (subtitle) => '<div class="header"><div><div class="company">PERRY BROTHERS OIL COMPANY</div><div class="list-title">' + escapeHtml(subtitle) + '</div></div><div class="header-right">Generated: ' + escapeHtml(now) + '</div></div>';
+  const sections = groupsPresent.map(g => {
+    const orders = rows.filter(r => r.g === g).map(r => r.o);
+    const inner = mode === 'individual' ? plIndividualHtml(orders, g, now) : plCombinedHtml(orders, g, now);
+    return '<div class="grp g-' + g + '">' + inner + '</div>';
+  }).join('');
 
-  let body = '';
-  if (mode === 'individual') {
-    body = orders.map(o => {
-      const m = o.managers || {};
-      const rows = plItemsFor(o, g).map(oi =>
-        '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(oi.vin_snapshot || '—') + '</td><td>' + escapeHtml(oi.product_name_snapshot) + '</td><td class="center">' + oi.quantity + '</td><td></td><td></td></tr>'
-      ).join('');
-      return '<div class="ticket">' + header(cfg.label) +
-        '<div class="info-box">' +
-          '<div><div class="info-label">Store / Customer</div><div class="info-value">' + escapeHtml(plStoreLabel(o)) + '</div><div class="info-sub">' + escapeHtml(m.site_address || '') + '</div></div>' +
-          '<div><div class="info-label">Order Placed</div><div class="info-value">' + escapeHtml(new Date(o.created_at).toLocaleString()) + '</div></div>' +
-          '<div><div class="info-label">PBO2GO Order ID</div><div class="info-value">' + escapeHtml(plOrderId(o)) + '</div></div>' +
-        '</div>' +
-        (o.comments ? '<div class="note"><b>Order comment:</b> ' + escapeHtml(o.comments) + '</div>' : '') +
-        '<table><thead><tr><th class="center" style="width:12%">VIN</th><th style="width:42%">Description</th><th class="center" style="width:9%">Ord Qty</th><th class="center" style="width:13%">Picked Qty</th><th style="width:24%">Notes</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      '</div>';
-    }).join('');
-  } else {
-    const agg = new Map();
-    orders.forEach(o => {
-      plItemsFor(o, g).forEach(oi => {
-        const key = (oi.vin_snapshot || '') + '|' + oi.product_name_snapshot;
-        if (!agg.has(key)) agg.set(key, { vin: oi.vin_snapshot || '—', desc: oi.product_name_snapshot, total: 0, stores: new Map() });
-        const a = agg.get(key);
-        a.total += oi.quantity;
-        const lbl = (o.managers && o.managers.site_number) ? String(o.managers.site_number) : plStoreLabel(o);
-        a.stores.set(lbl, (a.stores.get(lbl) || 0) + oi.quantity);
-      });
-    });
-    const lines = [...agg.values()].sort((a, b) => a.desc.localeCompare(b.desc));
-    const rows = lines.map(a =>
-      '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(a.vin) + '</td><td>' + escapeHtml(a.desc) + '</td><td class="center"><b>' + a.total + '</b></td><td>' + escapeHtml([...a.stores.entries()].map(([s, q]) => s + ': ' + q).join(', ')) + '</td><td></td></tr>'
-    ).join('');
-    const commented = orders.filter(o => o.comments);
-    const first = new Date(orders[0].created_at).toLocaleDateString();
-    const last = new Date(orders[orders.length - 1].created_at).toLocaleDateString();
-    body = '<div>' + header(cfg.label + ' — Combined Summary') +
-      '<div class="info-box">' +
-        '<div><div class="info-label">Orders Included</div><div class="info-value">' + orders.length + '</div></div>' +
-        '<div><div class="info-label">Order Dates</div><div class="info-value">' + escapeHtml(first === last ? first : first + ' – ' + last) + '</div></div>' +
-        '<div><div class="info-label">Unique Items</div><div class="info-value">' + lines.length + '</div></div>' +
-      '</div>' +
-      '<table><thead><tr><th class="center" style="width:11%">VIN</th><th style="width:36%">Description</th><th class="center" style="width:10%">Total Qty</th><th style="width:30%">By Store (site: qty)</th><th style="width:13%">Picked</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      (commented.length ? '<div class="note"><b>Order comments:</b><br>' + commented.map(o => escapeHtml(plOrderId(o)) + ' (' + escapeHtml(plStoreLabel(o)) + '): ' + escapeHtml(o.comments)).join('<br>') + '</div>' : '') +
-    '</div>';
-  }
-
-  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(cfg.label) + '</title><style>' + css + '</style></head><body>' + body +
-    '<div class="footer"><span>Signed: ___________________________________&nbsp;&nbsp; Date: ______________</span><span>' + escapeHtml(cfg.label) + '</span></div>' +
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + escapeHtml(docLabel) + '</title><style>' + css + '</style></head><body><div id="docs">' + sections + '</div>' +
+    '<div class="footer"><span>Signed: ___________________________________&nbsp;&nbsp; Date: ______________</span><span>' + escapeHtml(docLabel) + '</span></div>' +
     '<script>window.onload=function(){window.print();};<\/script></body></html>';
 
   const win = window.open('', '_blank');
@@ -1681,34 +1720,39 @@ async function printSelectedPickLists(mode){
   win.document.close();
 
   if (document.getElementById('pl-auto').checked) {
-    const toMark = orders.filter(o => !o[cfg.col]).map(o => o.id);
-    if (toMark.length > 0) {
-      const { error } = await plSetProcessed(toMark, g, true);
-      if (error) {
-        alert('Printed, but could not mark the orders as processed: ' + error.message);
-        return;
+    const batches = groupsPresent
+      .map(g => ({ g, ids: rows.filter(r => r.g === g && !r.done).map(r => r.o.id) }))
+      .filter(b => b.ids.length > 0);
+    if (batches.length > 0) {
+      for (const b of batches) {
+        const { error } = await plSetProcessed(b.ids, b.g, true);
+        if (error) {
+          alert('Printed, but could not mark the orders as processed: ' + error.message);
+          return;
+        }
       }
       await loadPickLists();
-      showPickListBanner(toMark, g);
+      showPickListBanner(batches);
     }
   }
 }
 
 async function markSelectedProcessed(){
-  const orders = plSelectedOrders();
-  if (orders.length === 0) { alert('Select at least one order first.'); return; }
+  const rows = plSelectedRows();
+  if (rows.length === 0) { alert('Select at least one order first.'); return; }
   const status = document.getElementById('pl-status').value;
   const makeProcessed = status !== 'done';
-  const g = plGroupKey();
   const verb = makeProcessed ? 'processed' : 'NOT processed';
-  if (!confirm('Mark ' + orders.length + ' order' + (orders.length === 1 ? '' : 's') + ' as ' + verb + '?')) return;
+  if (!confirm('Mark ' + rows.length + ' order' + (rows.length === 1 ? '' : 's') + ' as ' + verb + '?')) return;
 
-  const { error } = await supabaseClient.rpc('set_orders_processed', {
-    p_order_ids: orders.map(o => o.id), p_group: g, p_processed: makeProcessed
-  });
-  if (error) {
-    alert('Could not update: ' + error.message);
-    return;
+  for (const g of ['PBO', 'GNG']) {
+    const ids = rows.filter(r => r.g === g).map(r => r.o.id);
+    if (ids.length === 0) continue;
+    const { error } = await plSetProcessed(ids, g, makeProcessed);
+    if (error) {
+      alert('Could not update: ' + error.message);
+      return;
+    }
   }
   await loadPickLists();
 }
