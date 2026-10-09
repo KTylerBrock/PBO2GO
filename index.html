@@ -473,7 +473,7 @@
       <button id="nav-order" class="active" onclick="switchView('order')">Place Order</button>
       <button id="nav-history" onclick="switchView('history')">Order History</button>
       <button id="nav-request" onclick="switchView('request')" style="display:none;">Request Product</button>
-      <button id="nav-picklists" onclick="switchView('picklists')" style="display:none;">Pick Lists<span class="count-badge" id="pl-badge" style="display:none;"></span></button>
+      <button id="nav-picklists" onclick="switchView('picklists')" style="display:none;">Pick Lists<span class="count-badge" id="pl-badge" title="Orders waiting to be processed" style="display:none;"></span></button>
       <button id="nav-requests" onclick="switchView('requests')" style="display:none;">Product Requests</button>
       <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
       <button id="nav-accounts" onclick="switchView('accounts')" style="display:none;">Accounts</button>
@@ -1832,6 +1832,7 @@ async function refreshPickBadge(){
   b.style.display = n ? '' : 'none';
 }
 setInterval(() => { if (document.visibilityState === 'visible') refreshPickBadge(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPickBadge(); });
 
 function plPrefSet(name, value){ try { localStorage.setItem('pl-' + currentUserId + '-' + name, value); } catch (e) {} }
 function plCanSeeBoth(){ return currentRole === 'owner' || currentRole === 'admin'; }
