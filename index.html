@@ -1121,7 +1121,7 @@ function escapeHtml(s){ return s.replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;"
 function resolveImageSrc(image_url){
   if (!image_url) return null;
   if (image_url.startsWith('http://') || image_url.startsWith('https://') || image_url.startsWith('blob:')) return image_url;
-  return 'images/' + encodeURIComponent(image_url) + '?v=20261009';
+  return 'images/' + encodeURIComponent(image_url) + '?v=20261009b';
 }
 
 function toggleFav(id, btn){
