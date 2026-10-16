@@ -1823,7 +1823,12 @@ async function refreshPickBadge(){
     .limit(1000);
   if (error || !data) return;
   let groups = ['PBO', 'GNG'];
-  if (!plCanSeeBoth()) { const g = plPrefGet('group'); if (g === 'PBO' || g === 'GNG') groups = [g]; }
+  if (!plCanSeeBoth()) {
+    // Fulfillment staff each work one list. Until they have picked theirs on the Pick Lists screen, a combined number would be wrong, so show nothing.
+    const g = plPrefGet('group');
+    if (g !== 'PBO' && g !== 'GNG') { b.style.display = 'none'; return; }
+    groups = [g];
+  }
   let n = 0;
   data.forEach(o => groups.forEach(g => {
     if (!o[PL_GROUPS[g].col] && o.order_items.some(oi => PL_GROUPS[g].routings.includes(oi.routing_group_snapshot))) n++;
