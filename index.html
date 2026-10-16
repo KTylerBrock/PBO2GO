@@ -851,11 +851,11 @@ let myFilters = [];
 let filtersInCart = false;
 const ADMIN_ROLES = ['owner', 'admin', 'viewer'];
 const ROLE_LABELS = { owner: 'Site Admin', admin: 'Site Admin', staff: 'Fulfillment', manager: 'Manager', viewer: 'Viewer', dm: 'District Manager' };
-const PLACE_FOR_SITE_ROLES = ['dm', 'admin', 'owner'];
+const PLACE_FOR_SITE_ROLES = ['dm', 'admin', 'owner', 'viewer'];
 const PRODUCT_EDIT_ROLES = ['owner', 'admin'];
 const PRODUCT_TOGGLE_ROLES = ['owner', 'admin', 'staff'];
 const CAN_SEE_ADMIN_ROLES = ['owner', 'admin', 'viewer', 'staff'];
-const PICKLIST_ROLES = ['owner', 'admin', 'staff'];
+const PICKLIST_ROLES = ['owner', 'admin', 'staff', 'viewer'];
 // Demo account (viewer role): screens behave like an admin account, but every change happens only in this
 // browser tab and is never saved. Refreshing the page resets everything.
 function isDemo(){ return currentRole === 'viewer'; }
@@ -1815,7 +1815,7 @@ function plPrefGet(name){ try { return localStorage.getItem('pl-' + currentUserI
 async function refreshPickBadge(){
   const b = document.getElementById('pl-badge');
   if (!b) return;
-  if (!currentUserId || !PICKLIST_ROLES.includes(currentRole)) { b.style.display = 'none'; return; }
+  if (!currentUserId || !PICKLIST_ROLES.includes(currentRole) || isDemo()) { b.style.display = 'none'; return; }
   const { data, error } = await supabaseClient
     .from('orders')
     .select('pbo_processed_at, gng_processed_at, order_items(routing_group_snapshot)')
@@ -1840,7 +1840,7 @@ setInterval(() => { if (document.visibilityState === 'visible') refreshPickBadge
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPickBadge(); });
 
 function plPrefSet(name, value){ try { localStorage.setItem('pl-' + currentUserId + '-' + name, value); } catch (e) {} }
-function plCanSeeBoth(){ return currentRole === 'owner' || currentRole === 'admin'; }
+function plCanSeeBoth(){ return currentRole === 'owner' || currentRole === 'admin' || isDemo(); }
 function plGroupValue(){ return document.getElementById('pl-group').value; }
 function plActiveGroups(){ const v = plGroupValue(); return v === 'ALL' ? ['PBO', 'GNG'] : [v]; }
 function plItemsFor(order, g){ return order.order_items.filter(oi => PL_GROUPS[g].routings.includes(oi.routing_group_snapshot)); }
@@ -1878,6 +1878,7 @@ async function loadPickLists(){
     return;
   }
   plOrders = data;
+  if (isDemo()) plOrders.forEach(o => { ['PBO', 'GNG'].forEach(g => { const k = o.id + '|' + g; if (k in demoPlProcessed) o[PL_GROUPS[g].col] = demoPlProcessed[k]; }); });
   plSelected = new Set();
   renderPickLists();
   refreshPickBadge();
@@ -1887,7 +1888,13 @@ function savePickListAuto(){
   plPrefSet('auto', document.getElementById('pl-auto').checked ? '1' : '0');
 }
 
+// Demo account: "processed" marks are kept only in this browser tab and never saved.
+const demoPlProcessed = {};
 async function plSetProcessed(ids, g, processed){
+  if (isDemo()) {
+    ids.forEach(id => { demoPlProcessed[id + '|' + g] = processed ? new Date().toISOString() : null; });
+    return { error: null };
+  }
   return supabaseClient.rpc('set_orders_processed', { p_order_ids: ids, p_group: g, p_processed: processed });
 }
 
