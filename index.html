@@ -1552,7 +1552,7 @@ function switchView(view){
   document.getElementById('nav-requests').classList.toggle('active', view === 'requests');
   document.getElementById('nav-picklists').classList.toggle('active', view === 'picklists');
   document.getElementById('picklists-view').style.display = view === 'picklists' ? 'block' : 'none';
-  if (view === 'picklists') loadPickLists();
+  if (view === 'picklists') loadPickLists(true);
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
   document.getElementById('nav-accounts').classList.toggle('active', view === 'accounts');
   document.getElementById('nav-profile').classList.toggle('active', view === 'profile');
@@ -1847,7 +1847,7 @@ function plItemsFor(order, g){ return order.order_items.filter(oi => PL_GROUPS[g
 function plOrderId(o){ const m = o.managers || {}; return m.site_number ? `${m.site_number}-${o.order_number}` : `Corporate-${o.order_number}`; }
 function plStoreLabel(o){ const m = o.managers || {}; return m.site_number ? siteLabel(m) : (m.name || m.store || ''); }
 
-async function loadPickLists(){
+async function loadPickLists(fresh){
   const sel = document.getElementById('pl-group');
   const bothOpt = sel.querySelector('option[value="ALL"]');
   if (plCanSeeBoth() && !bothOpt) {
@@ -1862,8 +1862,13 @@ async function loadPickLists(){
   const savedGroup = plPrefGet('group');
   sel.value = validGroups.includes(savedGroup) ? savedGroup : (plCanSeeBoth() ? 'ALL' : 'PBO');
   if (!validGroups.includes(savedGroup)) plPrefSet('group', sel.value);
-  const savedStatus = plPrefGet('status');
-  if (['open', 'done', 'all'].includes(savedStatus)) document.getElementById('pl-status').value = savedStatus;
+  // Opening the screen always starts on 'Not yet processed' with no date range, so the list matches the red badge.
+  // (Only the list choice is remembered; reloads after printing or marking keep whatever view is on screen.)
+  if (fresh) {
+    document.getElementById('pl-status').value = 'open';
+    document.getElementById('pl-from').value = '';
+    document.getElementById('pl-to').value = '';
+  }
   const savedAuto = plPrefGet('auto');
   if (savedAuto !== null) document.getElementById('pl-auto').checked = savedAuto === '1';
 
@@ -1915,7 +1920,6 @@ function showPickListBanner(batches){
 
 function onPickListFilterChange(){
   plPrefSet('group', plGroupValue());
-  plPrefSet('status', document.getElementById('pl-status').value);
   refreshPickBadge();
   document.getElementById('pl-banner').style.display = 'none';
   plSelected = new Set();
