@@ -188,6 +188,12 @@
   .order-card{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);}
   .order-card .order-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
   .order-card .order-head .order-num{font-size:16px;font-weight:800;}
+  .order-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-2px 0 10px;font-size:12.5px;}
+  .status-pill{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:99px;}
+  .status-pill.received{background:rgba(242,180,65,.18);color:#f2b441;}
+  .status-pill.partial{background:rgba(0,153,204,.25);color:#7fdcff;}
+  .status-pill.processed{background:rgba(62,207,142,.18);color:#5fe0a6;}
+  .status-detail{color:rgba(255,255,255,.65);}
   .order-card .order-head .order-meta{font-size:12.5px;color:rgba(255,255,255,0.7);}
   .order-card table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:13px;}
   .order-card th{text-align:left;padding:5px 8px;color:rgba(255,255,255,0.6);font-weight:600;font-size:11.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.15);}
@@ -1545,7 +1551,9 @@ function closeSuccessModal(){
   document.getElementById('success-modal').classList.remove('active');
 }
 
+let currentView = 'order';
 function switchView(view){
+  currentView = view;
   document.getElementById('nav-order').classList.toggle('active', view === 'order');
   document.getElementById('nav-history').classList.toggle('active', view === 'history');
   document.getElementById('nav-request').classList.toggle('active', view === 'request');
@@ -1624,7 +1632,7 @@ async function reloadHistoryForFilter(){
 async function fetchHistoryPage(){
   let query = supabaseClient
     .from('orders')
-    .select('id, order_number, created_at, comments, managers!orders_manager_id_fkey!inner(name, store, site_number, dm_name, dm_email, site_phone, site_address), placedBy:managers!orders_placed_by_id_fkey(name), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+    .select('id, order_number, created_at, comments, pbo_processed_at, gng_processed_at, managers!orders_manager_id_fkey!inner(name, store, site_number, dm_name, dm_email, site_phone, site_address), placedBy:managers!orders_placed_by_id_fkey(name), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
     .order('created_at', { ascending: false })
     .range(historyPage * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE + HISTORY_PAGE_SIZE - 1);
 
@@ -1648,6 +1656,43 @@ async function loadMoreHistory(){
   historyPage += 1;
   await fetchHistoryPage();
   renderHistoryList();
+}
+
+/* Order status for the history screen, based on whether the warehouse has processed each list's items. */
+function orderStatusInfo(o){
+  const items = o.order_items || [];
+  const groups = [];
+  if (items.some(oi => oi.routing_group_snapshot === 'PBO')) groups.push({ name: 'PBO', at: o.pbo_processed_at });
+  if (items.some(oi => oi.routing_group_snapshot === 'GNG' || oi.routing_group_snapshot === 'FILTER')) groups.push({ name: 'GNG', at: o.gng_processed_at });
+  const done = groups.filter(g => g.at).length;
+  let label = 'Received', cls = 'received';
+  if (groups.length && done === groups.length) { label = 'Processed'; cls = 'processed'; }
+  else if (done > 0) { label = 'Partly processed'; cls = 'partial'; }
+  const detail = groups.map(g => g.name + ' items: ' + (g.at ? 'processed ' + new Date(g.at).toLocaleString() : 'waiting')).join(' \u00b7 ');
+  return { label, cls, detail };
+}
+function orderStatusHtml(o){
+  const st = orderStatusInfo(o);
+  return `<div class="order-status" data-status-for="${o.id}"><span class="status-pill ${st.cls}">${st.label}</span><span class="status-detail">${escapeHtml(st.detail)}</span></div>`;
+}
+let historyRefreshing = false;
+async function refreshHistoryStatuses(){
+  if (historyRefreshing || !historyOrders.length) return;
+  historyRefreshing = true;
+  try {
+    const ids = historyOrders.map(o => o.id);
+    const { data, error } = await supabaseClient.from('orders').select('id, pbo_processed_at, gng_processed_at').in('id', ids);
+    if (error || !data) return;
+    let changed = false;
+    data.forEach(r => {
+      const o = historyOrders.find(x => x.id === r.id);
+      if (o && (o.pbo_processed_at !== r.pbo_processed_at || o.gng_processed_at !== r.gng_processed_at)) {
+        o.pbo_processed_at = r.pbo_processed_at; o.gng_processed_at = r.gng_processed_at; changed = true;
+        const el = document.querySelector('[data-status-for="' + o.id + '"]');
+        if (el) el.outerHTML = orderStatusHtml(o);
+      }
+    });
+  } finally { historyRefreshing = false; }
 }
 
 function renderHistoryList(){
@@ -1684,6 +1729,7 @@ function renderHistoryList(){
         <span class="order-num">Order #${o.order_number}${storeLabel}${placedBySuffix}</span>
         <span class="order-meta">${when}${historyIsTop4 ? ` <button class="btn-preview" onclick="openEmailPreview('${o.id}')">Preview Emails</button>` : ''}</span>
       </div>
+      ${orderStatusHtml(o)}
       <table>
         <tr><th>Item</th><th>VIN</th><th>Routing</th><th>Qty</th></tr>
         ${rows}
@@ -1836,8 +1882,37 @@ async function refreshPickBadge(){
   b.textContent = String(n);
   b.style.display = n ? '' : 'none';
 }
-setInterval(() => { if (document.visibilityState === 'visible') refreshPickBadge(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPickBadge(); });
+const LIVE_REFRESH_MS = 15000;
+setInterval(() => { if (document.visibilityState === 'visible') refreshPickBadge(); }, LIVE_REFRESH_MS);
+// Keep the open screen current without the user touching it: Pick Lists and Order History pick up
+// changes other people make (marking orders processed) every few seconds, and the moment the tab is shown again.
+setInterval(() => { if (document.visibilityState === 'visible') liveRefreshCurrentView(); }, LIVE_REFRESH_MS);
+async function liveRefreshCurrentView(){
+  if (!currentUserId) return;
+  if (currentView === 'picklists') await plQuietRefresh();
+  else if (currentView === 'history') await refreshHistoryStatuses();
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshPickBadge(); liveRefreshCurrentView(); } });
+
+let plRefreshing = false;
+function plSignature(list){ return list.map(o => o.id + ':' + (o.pbo_processed_at || '') + ':' + (o.gng_processed_at || '') + ':' + o.order_items.length).join('|'); }
+async function plQuietRefresh(){
+  if (plRefreshing || !currentUserId || !PICKLIST_ROLES.includes(currentRole)) return;
+  plRefreshing = true;
+  try {
+    const { data, error } = await supabaseClient
+      .from('orders')
+      .select('id, order_number, created_at, comments, pbo_processed_at, gng_processed_at, managers!orders_manager_id_fkey!inner(name, store, site_number, site_address), order_items(product_name_snapshot, vin_snapshot, routing_group_snapshot, quantity)')
+      .order('created_at', { ascending: true })
+      .limit(1000);
+    if (error || !data) return;
+    if (isDemo()) data.forEach(o => { ['PBO', 'GNG'].forEach(g => { const k = o.id + '|' + g; if (k in demoPlProcessed) o[PL_GROUPS[g].col] = demoPlProcessed[k]; }); });
+    if (plSignature(data) === plSignature(plOrders)) return;
+    plOrders = data;            // selections are kept; rows that disappeared are dropped by renderPickLists
+    renderPickLists();
+    refreshPickBadge();
+  } finally { plRefreshing = false; }
+}
 
 function plPrefSet(name, value){ try { localStorage.setItem('pl-' + currentUserId + '-' + name, value); } catch (e) {} }
 function plCanSeeBoth(){ return currentRole === 'owner' || currentRole === 'admin' || isDemo(); }
