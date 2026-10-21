@@ -1044,7 +1044,7 @@ async function loadProducts(){
     return;
   }
   PRODUCTS = data;
-  loadFavs();
+  await loadFavs();
   renderCatSidebar();
   renderProductGrid();
 }
@@ -1055,14 +1055,28 @@ function categoryCounts(){
   return counts;
 }
 
-/* Favorites are remembered per person on this computer/browser */
+/* Favorites are saved to the person's account (the "favorites" table), so they follow them to any computer.
+   The demo login keeps favorites in this browser tab only. */
 let FAVS = new Set();
 let searchCat = null;
-function loadFavs(){
-  try { FAVS = new Set(JSON.parse(localStorage.getItem('pbo2go-fav-' + currentUserId) || '[]')); } catch (e) { FAVS = new Set(); }
-}
-function saveFavs(){
-  try { localStorage.setItem('pbo2go-fav-' + currentUserId, JSON.stringify([...FAVS])); } catch (e) {}
+async function loadFavs(){
+  FAVS = new Set();
+  if (isDemo()) return;
+  const { data, error } = await supabaseClient.from('favorites').select('product_id');
+  if (!error && data) FAVS = new Set(data.map(r => r.product_id));
+  if (error) return;
+  // One-time move of favorites that were saved in this browser before they were tied to the account.
+  const key = 'pbo2go-fav-' + currentUserId;
+  let local = [];
+  try { local = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) {}
+  const known = new Set(PRODUCTS.map(p => p.id));
+  const toMove = local.filter(id => known.has(id) && !FAVS.has(id));
+  let moved = true;
+  if (toMove.length) {
+    const { error: e2 } = await supabaseClient.from('favorites').insert(toMove.map(id => ({ product_id: id })));
+    if (e2) moved = false; else toMove.forEach(id => FAVS.add(id));
+  }
+  if (moved) { try { localStorage.removeItem(key); } catch (e) {} }
 }
 function favCount(){ return PRODUCTS.filter(p => FAVS.has(p.id)).length; }
 
@@ -1130,20 +1144,34 @@ function resolveImageSrc(image_url){
   return 'images/' + encodeURIComponent(image_url) + '?v=20261009b';
 }
 
-function toggleFav(id, btn){
+function paintFav(id, on, animate){
+  const btn = document.querySelector('#pc-' + id + ' .fav');
+  if (!btn) return;
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', on);
+  btn.setAttribute('aria-label', on ? 'Remove from favorites' : 'Add to favorites');
+  const svg = btn.querySelector('svg'); if (svg) svg.setAttribute('fill', on ? 'currentColor' : 'none');
+  if (animate) btn.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.4) rotate(14deg)' }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
+}
+async function toggleFav(id){
   const on = !FAVS.has(id);
   if (on) FAVS.add(id); else FAVS.delete(id);
-  saveFavs();
-  if (btn) {
-    btn.classList.toggle('on', on);
-    btn.setAttribute('aria-pressed', on);
-    btn.setAttribute('aria-label', on ? 'Remove from favorites' : 'Add to favorites');
-    const svg = btn.querySelector('svg'); if (svg) svg.setAttribute('fill', on ? 'currentColor' : 'none');
-    btn.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.4) rotate(14deg)' }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
-  }
+  paintFav(id, on, true);
   showToast(on ? 'Added to Favorites' : 'Removed from Favorites');
   renderCatSidebar();
   if (activeCategory === 'FAV' && !searchTerm) setTimeout(renderProductGrid, 250);
+  if (isDemo()) return;
+  const q = on
+    ? await supabaseClient.from('favorites').insert({ product_id: id })
+    : await supabaseClient.from('favorites').delete().eq('product_id', id);
+  if (q.error && q.error.code !== '23505') {      // 23505 = already saved, which is fine
+    // Could not save: put it back the way it was and say so.
+    if (on) FAVS.delete(id); else FAVS.add(id);
+    paintFav(id, !on, false);
+    renderCatSidebar();
+    if (activeCategory === 'FAV' && !searchTerm) renderProductGrid();
+    showToast("Couldn't save that favorite. Check your connection and try again.");
+  }
 }
 
 function jumpToProduct(id){
@@ -1214,7 +1242,7 @@ function renderProductGrid(){
     const sub = unavailable && p.substitute_product_id ? PRODUCTS.find(x => x.id === p.substitute_product_id) : null;
     const chip = p.routing_group ? `<span class="lchip ${escapeHtml(p.routing_group)}">${escapeHtml(p.routing_group)}</span>` : '';
     const isFav = FAVS.has(p.id);
-    const fav = `<button type="button" class="fav ${isFav ? 'on' : ''}" aria-label="${isFav ? 'Remove from' : 'Add to'} favorites" aria-pressed="${isFav}" onclick="toggleFav('${p.id}', this)"><svg width="15" height="15" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg></button>`;
+    const fav = `<button type="button" class="fav ${isFav ? 'on' : ''}" aria-label="${isFav ? 'Remove from' : 'Add to'} favorites" aria-pressed="${isFav}" onclick="toggleFav('${p.id}')"><svg width="15" height="15" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg></button>`;
     const inCart = orderCart[p.id];
     let action;
     if (unavailable) {
