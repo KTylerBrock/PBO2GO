@@ -2108,7 +2108,7 @@ function plIndividualHtml(orders, g, now){
   return orders.map(o => {
     const m = o.managers || {};
     const rows = plItemsFor(o, g).map(oi =>
-      '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(oi.vin_snapshot || '—') + '</td><td>' + escapeHtml(oi.product_name_snapshot) + '</td><td class="center">' + oi.quantity + '</td><td></td><td></td></tr>'
+      '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(oi.vin_snapshot || '—') + '</td><td>' + escapeHtml(oi.product_name_snapshot) + '</td><td class="center">' + oi.quantity + '</td><td class="pick"></td><td></td></tr>'
     ).join('');
     return '<div class="ticket">' + plHeaderHtml(cfg.label, now) +
       '<div class="info-box">' +
@@ -2137,7 +2137,7 @@ function plCombinedHtml(orders, g, now){
   });
   const lines = [...agg.values()].sort((a, b) => a.desc.localeCompare(b.desc));
   const rows = lines.map(a =>
-    '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(a.vin) + '</td><td>' + escapeHtml(a.desc) + '</td><td class="center"><b>' + a.total + '</b></td><td>' + escapeHtml([...a.stores.entries()].map(([s, q]) => s + ': ' + q).join(', ')) + '</td><td></td></tr>'
+    '<tr><td class="center" style="white-space:nowrap">' + escapeHtml(a.vin) + '</td><td>' + escapeHtml(a.desc) + '</td><td class="center"><b>' + a.total + '</b></td><td>' + escapeHtml([...a.stores.entries()].map(([s, q]) => s + ': ' + q).join(', ')) + '</td><td class="pick"></td></tr>'
   ).join('');
   const commented = orders.filter(o => o.comments);
   const first = new Date(orders[0].created_at).toLocaleDateString();
@@ -2178,6 +2178,7 @@ async function printSelectedPickLists(mode){
     'thead th.center{text-align:center}' +
     'tbody tr:nth-child(even){background:#f9fafb}' +
     'tbody td{padding:5px 6px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:8.5pt}' +
+    'td.pick{border:1px solid #9ca3af;background:#fff}' +
     '.center{text-align:center}' +
     '.note{border:1px solid #d1d5db;background:#f9fafb;padding:6px 10px;font-size:8.5pt;margin-bottom:10px}' +
     '.ticket{page-break-after:always}' +
