@@ -2012,6 +2012,11 @@ function activityText(r){
   if (key === 'product:updated') return { text: 'edited product ' + t, sub: actChanges(d.changes) };
   if (r.category === 'request') return { text: (r.action === 'approved' ? 'approved' : 'declined') + ' a product request: ' + t, sub: escapeHtml((d.request_type === 'substitute' ? 'Substitute' : 'New product') + (d.requested_by ? ' \u00b7 requested by ' + d.requested_by : '')) };
   if (key === 'account:updated') return { text: 'edited account ' + t, sub: actChanges(d.changes) };
+  if (key === 'account:created') return { text: 'created account ' + t, sub: escapeHtml([ACT_ROLE_NAMES[d.role] || d.role, d.store].filter(Boolean).join(' · ')) };
+  if (key === 'account:deleted') return { text: 'deleted account ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
+  if (key === 'account:deactivated') return { text: 'deactivated account ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
+  if (key === 'account:reactivated') return { text: 'reactivated account ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
+  if (key === 'account:password_reset') return { text: 'reset the password for ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
   return { text: escapeHtml(r.action + ' ' + r.category) + ': ' + t };
 }
 function renderActivity(errMsg){
