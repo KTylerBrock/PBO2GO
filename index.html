@@ -188,6 +188,19 @@
   .order-card{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);border-radius:8px;padding:16px 18px;margin-bottom:16px;backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);}
   .order-card .order-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
   .order-card .order-head .order-num{font-size:16px;font-weight:800;}
+  .act-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .act-filters select{padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;font-size:13.5px;}
+  .act-filters select option{background:#151b26;color:#fff;}
+  .act-row{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;margin-bottom:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);border-radius:8px;}
+  .act-chip{flex:0 0 auto;min-width:78px;text-align:center;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:99px;margin-top:1px;}
+  .act-order{background:rgba(62,207,142,.18);color:#5fe0a6;}
+  .act-product{background:rgba(0,153,204,.25);color:#7fdcff;}
+  .act-request{background:rgba(242,180,65,.18);color:#f2b441;}
+  .act-account{background:rgba(180,140,255,.2);color:#cdb4ff;}
+  .act-main{flex:1;min-width:0;font-size:14px;line-height:1.4;overflow-wrap:anywhere;}
+  .act-sub{color:rgba(255,255,255,.62);font-size:12.5px;margin-top:2px;}
+  .act-when{flex:0 0 auto;color:rgba(255,255,255,.6);font-size:12.5px;white-space:nowrap;}
+  @media (max-width:640px){.act-row{flex-wrap:wrap;}.act-when{width:100%;order:3;}}
   .order-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-2px 0 10px;font-size:12.5px;}
   .status-pill{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:99px;}
   .status-pill.received{background:rgba(242,180,65,.18);color:#f2b441;}
@@ -483,6 +496,7 @@
       <button id="nav-requests" onclick="switchView('requests')" style="display:none;">Product Requests</button>
       <button id="nav-admin" onclick="switchView('admin')" style="display:none;">Admin</button>
       <button id="nav-accounts" onclick="switchView('accounts')" style="display:none;">Accounts</button>
+      <button id="nav-activity" onclick="switchView('activity')" style="display:none;">Activity</button>
       <button id="nav-profile" onclick="switchView('profile')">My Profile</button>
     </nav>
     <div class="userbox">
@@ -542,6 +556,25 @@
       <button class="btn-add" id="add-product-btn" onclick="openProductModal()">+ Add Product</button>
     </div>
     <div id="admin-product-rows"></div>
+  </div>
+
+  <div class="history-view" id="activity-view" style="display:none;padding:20px 22px;">
+    <h2 style="margin:0 0 4px;font-size:20px;">Activity</h2>
+    <div class="subtext" style="color:#00ccff;font-size:13px;margin-bottom:18px;font-weight:500;">Who changed what &mdash; newest first. Only Site Admins can see this screen.</div>
+    <div class="act-filters">
+      <select id="activity-category" onchange="loadActivity(true)" aria-label="Type of activity">
+        <option value="">All activity</option>
+        <option value="order">Orders processed</option>
+        <option value="product">Product changes</option>
+        <option value="request">Product requests</option>
+        <option value="account">Account changes</option>
+      </select>
+      <select id="activity-person" onchange="loadActivity(true)" aria-label="Person"><option value="">Everyone</option></select>
+    </div>
+    <div id="activity-list"></div>
+    <div style="text-align:center;margin-top:8px;">
+      <button id="activity-load-more-btn" class="btn-add" style="display:none;" onclick="loadActivity(false)">Load More</button>
+    </div>
   </div>
 
   <div class="admin-view" id="request-view" style="display:none;">
@@ -900,6 +933,7 @@ async function enterAppAsUser(userId){
   document.getElementById('nav-requests').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-picklists').style.display = PICKLIST_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-accounts').style.display = ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
+  document.getElementById('nav-activity').style.display = ACTIVITY_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   refreshPickBadge();
   document.querySelector('.view-login').style.display = 'none';
   document.getElementById('app-shell').style.display = 'block';
@@ -1591,6 +1625,8 @@ function switchView(view){
   if (view === 'picklists') loadPickLists(true);
   document.getElementById('nav-admin').classList.toggle('active', view === 'admin');
   document.getElementById('nav-accounts').classList.toggle('active', view === 'accounts');
+  document.getElementById('nav-activity').classList.toggle('active', view === 'activity');
+  document.getElementById('activity-view').style.display = view === 'activity' ? 'block' : 'none';
   document.getElementById('nav-profile').classList.toggle('active', view === 'profile');
   document.querySelector('.order-layout').style.display = view === 'order' ? '' : 'none';
   document.getElementById('mobile-cart-bar').style.display = view === 'order' ? '' : 'none';
@@ -1605,6 +1641,7 @@ function switchView(view){
   if (view === 'request') loadRequestView();
   if (view === 'requests') loadRequestsQueue();
   if (view === 'accounts') loadAccounts();
+  if (view === 'activity') loadActivity(true);
   if (view === 'profile') loadProfileView();
 }
 
@@ -1919,8 +1956,116 @@ async function liveRefreshCurrentView(){
   if (!currentUserId) return;
   if (currentView === 'picklists') await plQuietRefresh();
   else if (currentView === 'history') await refreshHistoryStatuses();
+  else if (currentView === 'activity') await activityQuietRefresh();
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { refreshPickBadge(); liveRefreshCurrentView(); } });
+
+/* ---------- Activity log (Site Admins only) ---------- */
+const ACTIVITY_ROLES = ['owner', 'admin'];
+const ACTIVITY_PAGE_SIZE = 50;
+const ACTIVITY_CHIPS = { order: 'Orders', product: 'Products', request: 'Requests', account: 'Accounts' };
+const ACT_FIELD_LABELS = { name: 'Name', category: 'Category', vin: 'Item number', routing_group: 'List', out_of_stock: 'Out of stock',
+  no_longer_available: 'No longer available', substitute: 'Replacement item', email: 'Email', phone: 'Phone', store: 'Store', role: 'Role', site_number: 'Site number' };
+const ACT_ROLE_NAMES = { owner: 'Owner', admin: 'Admin', staff: 'Fulfillment', manager: 'Store manager', dm: 'DM', viewer: 'Demo' };
+let activityRows = [];
+let activityHasMore = false;
+let activityLoading = false;
+let activityPeopleLoaded = false;
+
+function activityQuery(){
+  let q = supabaseClient.from('activity_log').select('id, created_at, actor_name, category, action, target_label, details').order('id', { ascending: false });
+  const cat = document.getElementById('activity-category').value;
+  const who = document.getElementById('activity-person').value;
+  if (cat) q = q.eq('category', cat);
+  if (who) q = q.eq('actor_name', who);
+  return q;
+}
+function activityWhen(iso){
+  const d = new Date(iso), now = new Date();
+  const t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (days === 0) return 'Today ' + t;
+  if (days === 1) return 'Yesterday ' + t;
+  return d.toLocaleDateString([], d.getFullYear() === now.getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + t;
+}
+function actVal(k, v){
+  if (v === true) return 'Yes';
+  if (v === false) return 'No';
+  if (v === null || v === undefined || v === '') return 'none';
+  return k === 'role' ? (ACT_ROLE_NAMES[v] || v) : String(v);
+}
+function actChanges(ch){
+  return Object.entries(ch || {}).map(([k, pair]) => {
+    if (k === 'image') return 'Photo changed';
+    if (k === 'site_details') return 'Site details changed';
+    return escapeHtml((ACT_FIELD_LABELS[k] || k) + ': ' + actVal(k, pair[0]) + ' \u2192 ' + actVal(k, pair[1]));
+  }).join(' \u00b7 ');
+}
+function activityText(r){
+  const d = r.details || {};
+  const t = '<b>' + escapeHtml(r.target_label || '') + '</b>';
+  const key = r.category + ':' + r.action;
+  if (key === 'order:processed') return { text: 'marked ' + t + ' as processed' };
+  if (key === 'order:unprocessed') return { text: 'moved ' + t + ' back to waiting' };
+  if (key === 'product:created') return { text: 'added product ' + t, sub: escapeHtml([d.category, d.routing_group && d.routing_group + ' list', d.vin && 'item ' + d.vin].filter(Boolean).join(' \u00b7 ')) };
+  if (key === 'product:deleted') return { text: 'deleted product ' + t, sub: escapeHtml(d.category || '') };
+  if (key === 'product:updated') return { text: 'edited product ' + t, sub: actChanges(d.changes) };
+  if (r.category === 'request') return { text: (r.action === 'approved' ? 'approved' : 'declined') + ' a product request: ' + t, sub: escapeHtml((d.request_type === 'substitute' ? 'Substitute' : 'New product') + (d.requested_by ? ' \u00b7 requested by ' + d.requested_by : '')) };
+  if (key === 'account:updated') return { text: 'edited account ' + t, sub: actChanges(d.changes) };
+  return { text: escapeHtml(r.action + ' ' + r.category) + ': ' + t };
+}
+function renderActivity(errMsg){
+  const list = document.getElementById('activity-list');
+  if (errMsg) { list.innerHTML = '<div class="subtext">' + escapeHtml(errMsg) + '</div>'; return; }
+  if (!activityRows.length) {
+    const filtered = document.getElementById('activity-category').value || document.getElementById('activity-person').value;
+    list.innerHTML = '<div class="subtext">' + (filtered ? 'Nothing matches those filters.' : 'No activity yet.') + '</div>';
+  } else {
+    list.innerHTML = activityRows.map(r => {
+      const a = activityText(r);
+      return '<div class="act-row"><span class="act-chip act-' + escapeHtml(r.category) + '">' + escapeHtml(ACTIVITY_CHIPS[r.category] || r.category) + '</span>'
+        + '<div class="act-main"><div class="act-text"><b class="act-who">' + escapeHtml(r.actor_name || 'System') + '</b> ' + a.text + '</div>'
+        + (a.sub ? '<div class="act-sub">' + a.sub + '</div>' : '') + '</div>'
+        + '<div class="act-when" title="' + escapeHtml(new Date(r.created_at).toLocaleString()) + '">' + escapeHtml(activityWhen(r.created_at)) + '</div></div>';
+    }).join('');
+  }
+  document.getElementById('activity-load-more-btn').style.display = activityHasMore ? '' : 'none';
+}
+async function loadActivityPeople(){
+  if (activityPeopleLoaded) return;
+  const { data, error } = await supabaseClient.from('managers').select('name').in('role', ['owner', 'admin', 'staff']).order('name');
+  if (error || !data) return;
+  activityPeopleLoaded = true;
+  const sel = document.getElementById('activity-person'), keep = sel.value;
+  sel.innerHTML = '<option value="">Everyone</option>' + data.map(p => '<option value="' + escapeHtml(p.name) + '">' + escapeHtml(p.name) + '</option>').join('');
+  sel.value = keep;
+}
+async function loadActivity(reset){
+  if (activityLoading || !ACTIVITY_ROLES.includes(currentRole)) return;
+  activityLoading = true;
+  try {
+    loadActivityPeople();
+    let q = activityQuery();
+    if (!reset && activityRows.length) q = q.lt('id', activityRows[activityRows.length - 1].id);
+    const { data, error } = await q.limit(ACTIVITY_PAGE_SIZE + 1);
+    if (error) { if (reset) { activityRows = []; activityHasMore = false; } renderActivity("Couldn't load activity: " + error.message); return; }
+    activityHasMore = data.length > ACTIVITY_PAGE_SIZE;
+    const page = data.slice(0, ACTIVITY_PAGE_SIZE);
+    activityRows = reset ? page : activityRows.concat(page);
+    renderActivity();
+  } finally { activityLoading = false; }
+}
+async function activityQuietRefresh(){
+  if (activityLoading || !ACTIVITY_ROLES.includes(currentRole)) return;
+  if (!activityRows.length) { await loadActivity(true); return; }
+  activityLoading = true;
+  try {
+    const { data, error } = await activityQuery().gt('id', activityRows[0].id).limit(200);
+    if (error || !data || !data.length) return;
+    activityRows = data.concat(activityRows);
+    renderActivity();
+  } finally { activityLoading = false; }
+}
 
 let plRefreshing = false;
 function plSignature(list){ return list.map(o => o.id + ':' + (o.pbo_processed_at || '') + ':' + (o.gng_processed_at || '') + ':' + o.order_items.length).join('|'); }
