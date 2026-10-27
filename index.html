@@ -2016,6 +2016,7 @@ function activityText(r){
   if (key === 'account:deleted') return { text: 'deleted account ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
   if (key === 'account:deactivated') return { text: 'deactivated account ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
   if (key === 'account:reactivated') return { text: 'reactivated account ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
+  if (key === 'account:password_self_reset') return { text: 'used "Forgot password" on their own account' };
   if (key === 'account:password_reset') return { text: 'reset the password for ' + t, sub: escapeHtml(ACT_ROLE_NAMES[d.role] || d.role || '') };
   return { text: escapeHtml(r.action + ' ' + r.category) + ': ' + t };
 }
