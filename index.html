@@ -926,7 +926,8 @@ async function enterAppAsUser(userId){
   currentUserId = userId;
   currentRole = profile.role;
   currentStore = profile.store;
-  document.getElementById('user-name-label').textContent = profile.name;
+  // Store logins are shown by their store name; people by their own name.
+  document.getElementById('user-name-label').textContent = (profile.role === 'manager' && profile.store) ? profile.store : profile.name;
   document.getElementById('user-role-badge').textContent = roleLabel(profile.role);
   document.getElementById('nav-admin').style.display = CAN_SEE_ADMIN_ROLES.includes(profile.role) ? 'inline-block' : 'none';
   document.getElementById('nav-request').style.display = (profile.role === 'staff' || profile.role === 'viewer') ? 'inline-block' : 'none';
