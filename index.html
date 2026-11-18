@@ -783,7 +783,9 @@
         <option value="owner">Owner</option>
         <option value="admin">Admin</option>
         <option value="staff">Staff</option>
+        <option value="dm">District Manager</option>
         <option value="manager">Manager</option>
+        <option value="viewer">Viewer (read-only demo)</option>
       </select>
     </div>
     <div class="err" id="account-modal-err"></div>
@@ -2686,7 +2688,7 @@ async function loadAccounts(){
 
   const ROLE_SORT_ORDER = { owner: 0, admin: 1, staff: 2, dm: 3, viewer: 4, manager: 5 };
   data.sort((a, b) => {
-    const r = ROLE_SORT_ORDER[a.role] - ROLE_SORT_ORDER[b.role];
+    const r = (ROLE_SORT_ORDER[a.role] ?? 99) - (ROLE_SORT_ORDER[b.role] ?? 99);
     return r !== 0 ? r : a.name.localeCompare(b.name);
   });
 
@@ -2793,8 +2795,11 @@ async function saveAccount(){
   const record = { name, phone };
   if (currentRole === 'owner') {
     record.store = document.getElementById('account-store').value.trim();
-    record.role = document.getElementById('account-role').value;
-    if (record.role === 'manager') {
+    // Never save a blank role: keep whatever the account already has if the dropdown has no matching choice.
+    const chosenRole = document.getElementById('account-role').value;
+    const existing = ACCOUNTS.find(x => x.id === editingAccountId);
+    if (chosenRole) record.role = chosenRole;
+    if ((record.role || (existing && existing.role)) === 'manager') {
       const siteRaw = document.getElementById('account-site-number').value.trim();
       if (siteRaw && !/^\d+$/.test(siteRaw)) {
         errBox.textContent = 'Site number must be a whole number.';
