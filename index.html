@@ -767,9 +767,18 @@
       <label>Store</label>
       <input type="text" id="account-store">
     </div>
+    <div class="field" id="account-site-field">
+      <label>Site Number (PDI)</label>
+      <input type="number" id="account-site-number" placeholder="e.g. 81">
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:4px;">Changing this changes how this store's order numbers show (for example 81-1).</div>
+    </div>
+    <div class="field" id="account-arci-field">
+      <label>ARCI Store Code (Order Desk)</label>
+      <input type="text" id="account-arci" placeholder="e.g. 1234">
+    </div>
     <div class="field" id="account-role-field">
       <label>Role</label>
-      <select id="account-role">
+      <select id="account-role" onchange="toggleAccountSiteFields()">
         <option value="owner">Owner</option>
         <option value="admin">Admin</option>
         <option value="staff">Staff</option>
@@ -817,6 +826,10 @@
     <div class="field" id="new-account-site-field">
       <label>Site Number</label>
       <input type="number" id="new-account-site-number" placeholder="e.g. 81">
+    </div>
+    <div class="field" id="new-account-arci-field">
+      <label>ARCI Store Code (Order Desk)</label>
+      <input type="text" id="new-account-arci" placeholder="e.g. 1234">
     </div>
     <div class="err" id="new-account-modal-err"></div>
     <div class="modal-actions">
@@ -1967,7 +1980,7 @@ const ACTIVITY_ROLES = ['owner', 'admin'];
 const ACTIVITY_PAGE_SIZE = 50;
 const ACTIVITY_CHIPS = { order: 'Orders', product: 'Products', request: 'Requests', account: 'Accounts' };
 const ACT_FIELD_LABELS = { name: 'Name', category: 'Category', vin: 'Item number', routing_group: 'List', out_of_stock: 'Out of stock',
-  no_longer_available: 'No longer available', substitute: 'Replacement item', email: 'Email', phone: 'Phone', store: 'Store', role: 'Role', site_number: 'Site number' };
+  no_longer_available: 'No longer available', substitute: 'Replacement item', email: 'Email', phone: 'Phone', store: 'Store', role: 'Role', site_number: 'Site number', arci_store_code: 'ARCI store code' };
 const ACT_ROLE_NAMES = { owner: 'Owner', admin: 'Admin', staff: 'Fulfillment', manager: 'Store manager', dm: 'DM', viewer: 'Demo' };
 let activityRows = [];
 let activityHasMore = false;
@@ -2660,7 +2673,7 @@ async function loadAccounts(){
 
   const { data, error } = await supabaseClient
     .from('managers')
-    .select('id, name, email, phone, store, role, site_number, is_protected, is_active')
+    .select('id, name, email, phone, store, role, site_number, arci_store_code, is_protected, is_active')
     .order('name');
 
   if (error) {
@@ -2681,17 +2694,19 @@ async function loadAccounts(){
 function renderAccounts(){
   let list = ACCOUNTS;
   if (accountsSearchTerm) {
-    list = list.filter(m => m.name.toLowerCase().includes(accountsSearchTerm) || m.email.toLowerCase().includes(accountsSearchTerm));
+    list = list.filter(m => [m.name, m.email, m.store, m.site_number, m.arci_store_code].some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(accountsSearchTerm)));
   }
 
   document.getElementById('accounts-rows').innerHTML = `<table class="admin-table">
-    <tr><th>Name</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th>Status</th><th></th></tr>` + list.map(m => {
+    <tr><th>Name</th><th>Site #</th><th>ARCI</th><th>Email</th><th>Role</th><th>Store</th><th>Phone</th><th>Status</th><th></th></tr>` + list.map(m => {
     const canEdit = currentRole !== 'viewer' && (currentRole === 'owner' || m.id === currentUserId);
     const canResetPassword = currentRole !== 'viewer' && (m.role !== 'owner' || m.id === currentUserId);
     const canDelete = currentRole === 'owner' && !m.is_protected && m.id !== currentUserId;
     const canDeactivate = ['owner', 'admin'].includes(currentRole) && m.role !== 'owner' && m.id !== currentUserId;
     return `<tr>
       <td>${escapeHtml(m.name)}</td>
+      <td>${m.site_number !== null && m.site_number !== undefined ? escapeHtml(String(m.site_number)) : ''}</td>
+      <td>${escapeHtml(m.arci_store_code || '')}</td>
       <td>${escapeHtml(m.email)}</td>
       <td><span class="rolechip ${escapeHtml(m.role)}">${escapeHtml(roleLabel(m.role))}</span></td>
       <td>${escapeHtml(m.store || '')}</td>
@@ -2738,12 +2753,22 @@ function openAccountModal(id){
   document.getElementById('account-phone').value = m.phone || '';
   document.getElementById('account-store').value = m.store || '';
   document.getElementById('account-role').value = m.role;
+  document.getElementById('account-site-number').value = m.site_number !== null && m.site_number !== undefined ? m.site_number : '';
+  document.getElementById('account-arci').value = m.arci_store_code || '';
 
   const isOwner = currentRole === 'owner';
   document.getElementById('account-store-field').style.display = isOwner ? 'block' : 'none';
   document.getElementById('account-role-field').style.display = isOwner ? 'block' : 'none';
+  toggleAccountSiteFields();
 
   document.getElementById('account-modal').classList.add('active');
+}
+
+// Site number and ARCI code only apply to store accounts, and only the owner can change them.
+function toggleAccountSiteFields(){
+  const show = currentRole === 'owner' && document.getElementById('account-role').value === 'manager';
+  document.getElementById('account-site-field').style.display = show ? 'block' : 'none';
+  document.getElementById('account-arci-field').style.display = show ? 'block' : 'none';
 }
 
 function closeAccountModal(){
@@ -2766,6 +2791,16 @@ async function saveAccount(){
   if (currentRole === 'owner') {
     record.store = document.getElementById('account-store').value.trim();
     record.role = document.getElementById('account-role').value;
+    if (record.role === 'manager') {
+      const siteRaw = document.getElementById('account-site-number').value.trim();
+      if (siteRaw && !/^\d+$/.test(siteRaw)) {
+        errBox.textContent = 'Site number must be a whole number.';
+        errBox.style.display = 'block';
+        return;
+      }
+      record.site_number = siteRaw ? parseInt(siteRaw, 10) : null;
+      record.arci_store_code = document.getElementById('account-arci').value.trim() || null;
+    }
   }
 
   const btn = document.getElementById('save-account-btn');
@@ -2845,6 +2880,7 @@ function toggleNewAccountStoreFields(){
   const isManager = document.getElementById('new-account-role').value === 'manager';
   document.getElementById('new-account-store-field').style.display = isManager ? 'block' : 'none';
   document.getElementById('new-account-site-field').style.display = isManager ? 'block' : 'none';
+  document.getElementById('new-account-arci-field').style.display = isManager ? 'block' : 'none';
 }
 
 function openNewAccountModal(){
@@ -2854,6 +2890,7 @@ function openNewAccountModal(){
   document.getElementById('new-account-role').value = 'manager';
   document.getElementById('new-account-store').value = '';
   document.getElementById('new-account-site-number').value = '';
+  document.getElementById('new-account-arci').value = '';
   document.getElementById('new-account-modal-err').style.display = 'none';
   toggleNewAccountStoreFields();
   document.getElementById('new-account-modal').classList.add('active');
@@ -2872,6 +2909,7 @@ async function saveNewAccount(){
   const store = isManager ? document.getElementById('new-account-store').value.trim() : 'Corporate';
   const siteNumberRaw = document.getElementById('new-account-site-number').value.trim();
   const siteNumber = isManager && siteNumberRaw ? parseInt(siteNumberRaw, 10) : null;
+  const arciStoreCode = isManager ? (document.getElementById('new-account-arci').value.trim() || null) : null;
 
   const errBox = document.getElementById('new-account-modal-err');
   errBox.style.display = 'none';
@@ -2887,7 +2925,7 @@ async function saveNewAccount(){
   btn.textContent = 'Creating...';
 
   const { data, error } = await supabaseClient.functions.invoke('create-account', {
-    body: { name, email, phone, role, store, site_number: siteNumber }
+    body: { name, email, phone, role, store, site_number: siteNumber, arci_store_code: arciStoreCode }
   });
 
   btn.disabled = false;
